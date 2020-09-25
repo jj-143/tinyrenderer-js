@@ -1,5 +1,4 @@
 import model from '../obj/african_head.obj'
-import { line } from './drawer'
 
 export function read() {
   return fetch(model).then(
@@ -16,7 +15,7 @@ export function getVF(lines, halfW) {
 
   lines.forEach(line => {
     if (line.split(" ", 1)[0] === 'v') {
-      vs.push(line.split(" ").splice(1).map(v => halfW * (Number(v) + 1)))
+      vs.push(line.split(" ").splice(1).map(v => Number(v)))
     } else if (line[0] === 'f') {
       fs.push(Array.from(line.matchAll(/ (\d+)\//g)).map(k => Number(k[1]) - 1))
     }

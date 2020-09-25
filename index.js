@@ -55,16 +55,16 @@ function run(t) {
   requestAnimationFrame(run)
 }
 
-import { drawModel } from './src/utils/parser'
+import { drawModel } from './src/utils/drawer'
 
-// drawModel(data, w, green)
-//   .then(() => {
-//     ctx.putImageData(imgData, 0, 0)
-//   })
+drawModel(data, w, green)
+  .then(() => {
+    ctx.putImageData(imgData, 0, 0)
+  })
 
-triangle([10, 70], [50, 160], [70, 80], data, green, w)
-triangle([10, 10], [80, 10], [30, 80], data, green, w)
-triangle([180, 50], [150, 1], [70, 180], data, green, w)
-triangle([120, 180], [180, 180], [150, 80], data, green, w)
+// triangle([10, 70], [50, 160], [70, 80], data, green, w)
+// triangle([10, 10], [80, 10], [30, 80], data, [255, 0, 0, 255], w)
+// triangle([180, 50], [150, 1], [70, 180], data, [255, 255, 0, 255], w)
+// triangle([120, 180], [180, 180], [150, 80], data, [0, 0, 255, 255], w)
 // triangle([180, 150], [120, 160], [130, 180], data, green, w)
-ctx.putImageData(imgData, 0, 0)
+// ctx.putImageData(imgData, 0, 0)

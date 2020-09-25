@@ -1,13 +1,14 @@
 import { getVF, read } from "./parser"
+import { dot, cross, normalize, subtract } from "./vecOps"
 
 export function drawData(x, y, data, rgba, width) {
   let pos = parseInt(width - y) * width + parseInt(x)
-  // console.log(pos, x, y);
   data[pos * 4] = rgba[0]
   data[pos * 4 + 1] = rgba[1]
   data[pos * 4 + 2] = rgba[2]
   data[pos * 4 + 3] = rgba[3] ?? data[pos * 4 + 3]
 }
+
 function line1(p1, p2, data, rgba, width) {
   let [x1, y1] = p1
   let [x2, y2] = p2
@@ -102,24 +103,41 @@ export function line(p1, p2, data, rgba, width) {
   line3(p1, p2, data, rgba, width)
 }
 
+// diagonal light (e.g [1, 0, -1]) would not render some faces 
+// correctly. Maybe it's concave when seen from the light direction
+// probably solve in later lectures.
+let lightDir = normalize([0, 0, -1])
+
 export function drawModel(data, width, color) {
   return read().then(lines => {
     let [vertices, faces] = getVF(lines, width / 2)
 
     for (let f of faces) {
       let [v1, v2, v3] = f.map(vi => vertices[vi])
-      let p1 = v1.slice(0, 2).map(k => parseInt(k))
-      let p2 = v2.slice(0, 2).map(k => parseInt(k))
-      let p3 = v3.slice(0, 2).map(k => parseInt(k))
+      let p1 = v1.slice(0, 2).map(k => (1 + k) * width / 2)
+      let p2 = v2.slice(0, 2).map(k => (1 + k) * width / 2)
+      let p3 = v3.slice(0, 2).map(k => (1 + k) * width / 2)
 
-      line(p1, p2, data, color, width)
-      line(p2, p3, data, color, width)
-      line(p3, p1, data, color, width)
+      let v13 = subtract(v3, v1)
+      let v12 = subtract(v2, v1)
+
+      let normal = cross(v13, v12)
+      normal = normalize(normal)
+
+      let intensity = dot(normal, lightDir)
+      if (intensity > 0) {
+        color[3] = 255 * intensity
+        triangle(p1, p2, p3, data, color, width)
+      }
     }
   })
 }
 
-
+/**
+ * for div by zero in either parts,
+ * the while clause is not executed since t1.y == t0.y
+ * and t2.y == t1.y, repectively.
+ */
 export function triangle(t0, t1, t2, data, color, width) {
   // what if 3 pts lie on a single line?
   ;[t0, t1, t2] = [t0, t1, t2].sort((a, b) => a[1] - b[1])
