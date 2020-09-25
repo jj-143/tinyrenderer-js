@@ -4,12 +4,6 @@ body {
 
 
 #app {
-  width: 50%;
-  margin: auto;
-  margin-top: 2em;
-}
-
-#app p {
-  background: white;
-  padding: 1em;
+  background: black;
+  /* image-rendering: pixelated; */
 }
