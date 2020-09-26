@@ -109,12 +109,12 @@ export function line(p1, p2, data, rgba, width) {
 // probably solve in later lectures.
 let lightDir = normalize([0, 0, -1])
 
-export function drawModel(data, width, color) {
+function drawModel(data, width, color) {
   return read().then(lines => {
     let [vertices, faces] = getVF(lines, width / 2)
 
     for (let f of faces) {
-      let [v1, v2, v3] = f.map(vi => vertices[vi])
+      let [v1, v2, v3] = f.v.map(vi => vertices[vi])
       let p1 = v1.slice(0, 2).map(k => (1 + k) * width / 2)
       let p2 = v2.slice(0, 2).map(k => (1 + k) * width / 2)
       let p3 = v3.slice(0, 2).map(k => (1 + k) * width / 2)
@@ -222,7 +222,7 @@ export function triangle(t0, t1, t2, data, color, width) {
   triangleWithBC(t0, t1, t2, data, color, width)
 }
 
-function tirangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width) {
+function tirangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width, diffData) {
   let bbmin = [
     Math.max(0, Math.min(t0[0], t1[0], t2[0])),
     Math.max(0, Math.min(t0[1], t1[1], t2[1]))
@@ -238,10 +238,24 @@ function tirangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width) {
       if (bc[0] < 0 || bc[1] < 0 || bc[2] < 0) continue
 
       let z = dot([t0[2], t1[2], t2[2]], bc)
-
       let zBi = parseInt(x + y * width)
+
       if (zBuffer[zBi] < z) {
+        // console.log(bc);
         zBuffer[zBi] = z
+
+        if (diffData) {
+
+          let u = parseInt(dot(diffData.vt.map(k => k[0]), bc))
+          let v = parseInt(dot(diffData.vt.map(k => k[1]), bc))
+
+          // let u = parseInt(diffData.vt.reduce((acc, val) => acc + val[0], 0) / 3)
+          // let v = parseInt(diffData.vt.reduce((acc, val) => acc + val[1], 0) / 3)
+          let k = u + (1024 - v) * 1024
+          color[0] = diffData.imageData[4 * k]
+          color[1] = diffData.imageData[4 * k + 1]
+          color[2] = diffData.imageData[4 * k + 2]
+        }
         drawData(x, y, data, color, width)
       }
     }
@@ -258,8 +272,12 @@ export function drawModelWithZBuffer(data, color, width, diffuse) {
       tga.open(diffuse, () => {
         //TODO:
         //this is 1024 * 1024 * 3 color data
+        // console.log(tga);
         res(
-          tga.imageData
+          {
+            imageData: tga.getImageData().data,
+            header: tga.header
+          }
         )
         // console.log(tga.imageData)
       })
@@ -270,13 +288,34 @@ export function drawModelWithZBuffer(data, color, width, diffuse) {
   let modelLoad = parseModel()
 
   return Promise.all([modelLoad, diffuseLoad])
-    .then(([[vertices, faces], diff]) => {
-      console.log(diff);
+    .then(([[vertices, faces, vts], diff]) => {
 
       let zBuffer = [...Array(data.length).keys()].map(_ => -Infinity)
+      let diffSize = [diff.header.width, diff.header.height]
+
+      let vtexture = []
+      let diffData = {
+        imageData: diff.imageData,
+        vt: vtexture
+      }
 
       for (let f of faces) {
-        let [t0, t1, t2] = f.map(vi => vertices[vi].map(v => (v + 1) * width / 2))
+        let [t0, t1, t2] = f.v.map(vi => vertices[vi].map(v => (v + 1) * width / 2))
+
+        let [vt0, vt1, vt2] = f.vt.map(vti => vts[vti].map((v, i) => v * diffSize[i]))
+
+        vtexture[0] = vt0
+        vtexture[1] = vt1
+        vtexture[2] = vt2
+        // console.log(vt0, vt1, vt2);
+
+        // Test with average value
+        // let vtAVG = [(vt0[0] + vt1[0] + vt2[0]) / 3, (vt0[1] + vt1[1] + vt2[1]) / 3]
+        // let vti = parseInt(vtAVG[0]) + diffSize[1] * parseInt(vtAVG[1])
+
+        // color[0] = diff.imageData[vti * 3]
+        // color[1] = diff.imageData[vti * 3 + 1]
+        // color[2] = diff.imageData[vti * 3 + 2]
 
         let t02 = subtract(t2, t0)
         let t01 = subtract(t1, t0)
@@ -286,7 +325,7 @@ export function drawModelWithZBuffer(data, color, width, diffuse) {
 
         let intensity = dot(normal, lightDir)
         color[3] = 255 * intensity
-        tirangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width)
+        tirangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width, diffData)
       }
     })
 }

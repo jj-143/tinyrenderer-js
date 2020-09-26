@@ -12,22 +12,31 @@ export function read(model) {
 export function getVF(lines, halfW) {
   let vs = []
   let fs = []
+  let vts = []
 
   lines.forEach(line => {
-    if (line.split(" ", 1)[0] === 'v') {
+    let type = line.split(" ", 1)[0]
+    if (type === 'v') {
       vs.push(line.split(" ").splice(1).map(v => Number(v)))
-    } else if (line[0] === 'f') {
-      fs.push(Array.from(line.matchAll(/ (\d+)\//g)).map(k => Number(k[1]) - 1))
+    } else if (type === 'vt') {
+      vts.push(line.match(/ [\d.]+/g).slice(0, 2).map(Number))
+    } else if (type === 'f') {
+
+      let matches = Array.from(line.matchAll(/ (\d+)\/(\d+)\//g))
+      let face = {
+        v: matches.map(m => Number(m[1]) - 1),
+        vt: matches.map(m => Number(m[2]) - 1)
+      }
+      fs.push(face)
     }
   })
-  return [vs, fs]
+  return [vs, fs, vts]
 }
 
 export function parseModel(model) {
   if (!model) {
     model = model_head
   }
-  return read(model).then(lines =>
-    getVF(lines)
-  )
+  return read(model)
+    .then(getVF)
 }
