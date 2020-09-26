@@ -1,5 +1,6 @@
-import { getVF, read } from "./parser"
+import { getVF, parseModel, read } from "./parser"
 import { dot, cross, normalize, subtract } from "./vecOps"
+import { calcBC } from './utils'
 
 export function drawData(x, y, data, rgba, width) {
   let pos = parseInt(width - y) * width + parseInt(x)
@@ -138,7 +139,7 @@ export function drawModel(data, width, color) {
  * the while clause is not executed since t1.y == t0.y
  * and t2.y == t1.y, repectively.
  */
-export function triangle(t0, t1, t2, data, color, width) {
+function triangleOldMethod(t0, t1, t2, data, color, width) {
   // what if 3 pts lie on a single line?
   ;[t0, t1, t2] = [t0, t1, t2].sort((a, b) => a[1] - b[1])
 
@@ -186,4 +187,106 @@ export function triangle(t0, t1, t2, data, color, width) {
     }
     y += 1
   }
+}
+
+/**
+ * model's vertices are in [-1, 1] for x,y,z.
+ * if we set zBuffers Max value 1,
+ * it's seen as in z = 1
+ * 
+ * if the z-plane is set z = 0,
+ * it clips at z = 0 and the further part of head will be rendered.
+ * i.e, if the model is the surface of the head,
+ * the inner part of the second half of head is rendered.
+ */
+function triangleWithBC(t0, t1, t2, data, color, width) {
+  let bbmin = [
+    Math.max(0, Math.min(t0[0], t1[0], t2[0])),
+    Math.max(0, Math.min(t0[1], t1[1], t2[1]))
+  ]
+  let bbmax = [
+    Math.min(width, Math.max(t0[0], t1[0], t2[0])),
+    Math.min(width, Math.max(t0[1], t1[1], t2[1]))
+  ]
+
+  for (let x = parseInt(bbmin[0]); x <= parseInt(bbmax[0]); x++) {
+    for (let y = parseInt(bbmin[1]); y <= parseInt(bbmax[1]); y++) {
+      let bc = calcBC(t0, t1, t2, [x, y])
+      if (bc[0] < 0 || bc[1] < 0 || bc[2] < 0) continue
+      drawData(x, y, data, color, width)
+    }
+  }
+}
+
+export function triangle(t0, t1, t2, data, color, width) {
+  triangleWithBC(t0, t1, t2, data, color, width)
+}
+
+function tirangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width) {
+  let bbmin = [
+    Math.max(0, Math.min(t0[0], t1[0], t2[0])),
+    Math.max(0, Math.min(t0[1], t1[1], t2[1]))
+  ]
+  let bbmax = [
+    Math.min(width, Math.max(t0[0], t1[0], t2[0])),
+    Math.min(width, Math.max(t0[1], t1[1], t2[1]))
+  ]
+
+  for (let x = parseInt(bbmin[0]); x <= parseInt(bbmax[0]); x++) {
+    for (let y = parseInt(bbmin[1]); y <= parseInt(bbmax[1]); y++) {
+      let bc = calcBC(t0, t1, t2, [x, y])
+      if (bc[0] < 0 || bc[1] < 0 || bc[2] < 0) continue
+
+      let z = dot([t0[2], t1[2], t2[2]], bc)
+
+      let zBi = parseInt(x + y * width)
+      if (zBuffer[zBi] < z) {
+        zBuffer[zBi] = z
+        drawData(x, y, data, color, width)
+      }
+    }
+  }
+}
+
+import TGAL from './tga'
+
+export function drawModelWithZBuffer(data, color, width, diffuse) {
+  let diffuseLoad
+  if (diffuse) {
+    const tga = new TGAL()
+    const resolver = (res => {
+      tga.open(diffuse, () => {
+        //TODO:
+        //this is 1024 * 1024 * 3 color data
+        res(
+          tga.imageData
+        )
+        // console.log(tga.imageData)
+      })
+    })
+    diffuseLoad = new Promise(resolver)
+  }
+
+  let modelLoad = parseModel()
+
+  return Promise.all([modelLoad, diffuseLoad])
+    .then(([[vertices, faces], diff]) => {
+      console.log(diff);
+
+      let zBuffer = [...Array(data.length).keys()].map(_ => -Infinity)
+
+      for (let f of faces) {
+        let [t0, t1, t2] = f.map(vi => vertices[vi].map(v => (v + 1) * width / 2))
+
+        let t02 = subtract(t2, t0)
+        let t01 = subtract(t1, t0)
+
+        let normal = cross(t02, t01)
+        normal = normalize(normal)
+
+        let intensity = dot(normal, lightDir)
+        color[3] = 255 * intensity
+        tirangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width)
+      }
+    })
 }

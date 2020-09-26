@@ -1,6 +1,6 @@
-import model from '../obj/african_head.obj'
+import model_head from '../obj/african_head.obj'
 
-export function read() {
+export function read(model) {
   return fetch(model).then(
     r =>
       r.text()
@@ -21,4 +21,13 @@ export function getVF(lines, halfW) {
     }
   })
   return [vs, fs]
+}
+
+export function parseModel(model) {
+  if (!model) {
+    model = model_head
+  }
+  return read(model).then(lines =>
+    getVF(lines)
+  )
 }
