@@ -1,2 +1,2 @@
 #!/bin/bash
-parcel ./index.html
+parcel ./src/index.html

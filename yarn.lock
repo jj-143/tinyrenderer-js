@@ -2,3 +2,5 @@
 # yarn lockfile v1
 
 
+tga-js@../tga.js:
+  version "1.1.0"

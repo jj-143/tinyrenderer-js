@@ -1,12 +1,9 @@
-import model_head from '../obj/african_head.obj'
+import model_head from "../obj/african_head.obj"
 
 export function read(model) {
-  return fetch(model).then(
-    r =>
-      r.text()
-  ).then(text =>
-    text.split("\n")
-  )
+  return fetch(model)
+    .then(r => r.text())
+    .then(text => text.split("\n"))
 }
 
 export function getVF(lines, halfW) {
@@ -16,16 +13,25 @@ export function getVF(lines, halfW) {
 
   lines.forEach(line => {
     let type = line.split(" ", 1)[0]
-    if (type === 'v') {
-      vs.push(line.split(" ").splice(1).map(v => Number(v)))
-    } else if (type === 'vt') {
-      vts.push(line.match(/ [\d.]+/g).slice(0, 2).map(Number))
-    } else if (type === 'f') {
-
+    if (type === "v") {
+      vs.push(
+        line
+          .split(" ")
+          .splice(1)
+          .map(v => Number(v)),
+      )
+    } else if (type === "vt") {
+      vts.push(
+        line
+          .match(/ [\d.]+/g)
+          .slice(0, 2)
+          .map(Number),
+      )
+    } else if (type === "f") {
       let matches = Array.from(line.matchAll(/ (\d+)\/(\d+)\//g))
       let face = {
         v: matches.map(m => Number(m[1]) - 1),
-        vt: matches.map(m => Number(m[2]) - 1)
+        vt: matches.map(m => Number(m[2]) - 1),
       }
       fs.push(face)
     }
@@ -37,6 +43,5 @@ export function parseModel(model) {
   if (!model) {
     model = model_head
   }
-  return read(model)
-    .then(getVF)
+  return read(model).then(getVF)
 }
