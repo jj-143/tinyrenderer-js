@@ -1,6 +1,6 @@
 import { getVF, parseModel, read } from "./parser"
 import { dot, cross, normalize, subtract, neg } from "./vecOps"
-import { calcBC } from "./utils"
+import { calcBC, perspectiveTrx } from "./utils"
 
 export function putPixel(x, y, data, rgba, width) {
   let pos = parseInt(width - y) * width + parseInt(x)
@@ -15,6 +15,9 @@ export function putPixel(x, y, data, rgba, width) {
 // the neg'ed value is used in calculation as light after
 // reflection at the model's surface.
 let lightDir = neg(normalize([0, 0, -1]))
+
+// camera is at this position, looking at z=0 plane (toward the screen)
+let cameraPosition = [0, 0, 2]
 
 function triangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width, diffData) {
   let bbmin = [
@@ -89,7 +92,10 @@ export function drawModelWithZBuffer(data, color, width, diffuse) {
     }
 
     for (let f of faces) {
-      let [t0, t1, t2] = f.v.map(vi => vertices[vi].map(v => ((v + 1) * width) / 2))
+      let [t0, t1, t2] = f.v.map(vi =>
+        perspectiveTrx(vertices[vi], cameraPosition).map(v => ((v + 1) * width) / 2),
+      )
+
       let t02 = subtract(t2, t0)
       let t01 = subtract(t1, t0)
       let normal = normalize(cross(t01, t02))
