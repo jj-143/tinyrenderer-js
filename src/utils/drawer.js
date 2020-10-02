@@ -1,6 +1,16 @@
 import { getVF, parseModel, read } from "./parser"
-import { dot, cross, normalize, subtract, neg } from "./vecOps"
-import { calcBC, perspectiveTrx } from "./utils"
+import {
+  columnVector,
+  dot,
+  cross,
+  normalize,
+  subtract,
+  neg,
+  matmul,
+  identity_4,
+  mToV,
+} from "./vecOps"
+import { calcBC, calcModelViewMatrix, calcPerspectiveMatrix, calcViewportMatrix } from "./utils"
 
 export function putPixel(x, y, data, rgba, width) {
   let pos = parseInt(width - y) * width + parseInt(x)
@@ -15,9 +25,6 @@ export function putPixel(x, y, data, rgba, width) {
 // the neg'ed value is used in calculation as light after
 // reflection at the model's surface.
 let lightDir = neg(normalize([0, 0, -1]))
-
-// camera is at this position, looking at z=0 plane (toward the screen)
-let cameraPosition = [0, 0, 2]
 
 function triangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width, diffData) {
   let bbmin = [
@@ -91,10 +98,21 @@ export function drawModelWithZBuffer(data, color, width, diffuse) {
       vt: [],
     }
 
+    let cameraPosition = [2, 0, 2]
+    let cameraUp = normalize([1, 1, 0])
+    let cameraLookAt = [0, 0, 0]
+
+    let modelView = calcModelViewMatrix(cameraPosition, cameraUp, cameraLookAt)
+    let perspective = calcPerspectiveMatrix(cameraPosition)
+
+    // FIXME: the depth resolution affects brightness now.
+    // might need normalizing value somewhere.
+    let viewport = calcViewportMatrix(100, -100, width, width, width / 2)
+
+    let combined = [viewport, perspective, modelView].reduce((acc, m) => matmul(acc, m), identity_4)
+
     for (let f of faces) {
-      let [t0, t1, t2] = f.v.map(vi =>
-        perspectiveTrx(vertices[vi], cameraPosition).map(v => ((v + 1) * width) / 2),
-      )
+      let [t0, t1, t2] = f.v.map(vi => mToV(matmul(combined, columnVector([...vertices[vi], 1]))))
 
       let t02 = subtract(t2, t0)
       let t01 = subtract(t1, t0)
