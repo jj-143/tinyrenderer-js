@@ -10,6 +10,7 @@ export function getVF(lines, halfW) {
   let vs = []
   let fs = []
   let vts = []
+  let vns = []
 
   lines.forEach(line => {
     let type = line.split(" ", 1)[0]
@@ -27,6 +28,14 @@ export function getVF(lines, halfW) {
           .slice(0, 2)
           .map(Number),
       )
+    } else if (type === "vn") {
+      vns.push(
+        line
+          .split(" ")
+          .filter(_ => _ != "")
+          .splice(1)
+          .map(v => Number(v)),
+      )
     } else if (type === "f") {
       let matches = Array.from(line.matchAll(/ (\d+)\/(\d+)\//g))
       let face = {
@@ -36,7 +45,7 @@ export function getVF(lines, halfW) {
       fs.push(face)
     }
   })
-  return [vs, fs, vts]
+  return [vs, fs, vts, vns]
 }
 
 export function parseModel(model) {

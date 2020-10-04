@@ -38,7 +38,7 @@ const adj = m => {
   )
 }
 
-const vecdiv = (v, scalar) => v.map(x => x / scalar)
+export const vecdiv = (v, scalar) => v.map(x => x / scalar)
 
 export const inverse = m => {
   let det = determinant(m)
@@ -58,9 +58,30 @@ export const transpose = a => {
   return [...Array(n).keys()].map(i => [...Array(m).keys()].map(j => a[j][i]))
 }
 
+export const matmul4 = (a, b) => {
+  let result = [
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+  ]
+
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      let val = 0
+      for (let k = 0; k < 4; k++) {
+        val += a[i][k] * b[k][j]
+      }
+      result[i][j] = val
+    }
+  }
+  return result
+}
+
 export const matmul = (a, b, out) => {
   if (a[0].length != b.length || !a[0].length || !b[0].length) throw Error("Dimension error")
-  let [m, n] = [a.length, b[0].length]
+  let m = a.length
+  let n = b[0].length
   let o = a[0].length
 
   let result = out ?? Array.from(Array(m)).map(_ => [])

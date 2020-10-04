@@ -1,4 +1,6 @@
 import { getVF, parseModel, read } from "./parser"
+
+import TGALoader from "tga-js"
 import {
   columnVector,
   dot,
@@ -9,15 +11,18 @@ import {
   matmul,
   identity_4,
   mToV,
+  transpose,
+  inverse,
 } from "./vecOps"
 import { calcBC, calcModelViewMatrix, calcPerspectiveMatrix, calcViewportMatrix } from "./utils"
 
 export function putPixel(x, y, data, rgba, width) {
-  let pos = parseInt(width - y) * width + parseInt(x)
+  let pos = parseInt(width - 1 - y) * width + parseInt(x)
   data[pos * 4] = rgba[0]
   data[pos * 4 + 1] = rgba[1]
   data[pos * 4 + 2] = rgba[2]
-  data[pos * 4 + 3] = rgba[3] ?? data[pos * 4 + 3]
+  data[pos * 4 + 3] = 255
+  // data[pos * 4 + 3] = rgba[3] ?? data[pos * 4 + 3]
 }
 
 // lightDir is used as negative value of it's original.
@@ -26,56 +31,62 @@ export function putPixel(x, y, data, rgba, width) {
 // reflection at the model's surface.
 let lightDir = neg(normalize([0, 0, -1]))
 
-function triangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width, diffData) {
+//TODO: light도 transform 해야 하나 해서 11시 방향으로 해준것. [-1, 0, -1]
+// 근데 정작 계산시 노말들은 변형 후 화면을 바라보는 방향으로 변화된거고
+// 그냥 화면방향 (직진 [0, 0, -1]) 하면 화면방향 정면으로 빛 방향 (즉 얼굴 측면방향으로 밝게)
+// 되야되는데 이렇게 해야정면에서 준것처럼 나온다.
+function triangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width, diffData, normals, lightDir) {
   let bbmin = [
-    Math.max(0, Math.min(t0[0], t1[0], t2[0])),
-    Math.max(0, Math.min(t0[1], t1[1], t2[1])),
+    Math.max(0, parseInt(Math.min(t0[0], t1[0], t2[0]))),
+    Math.max(0, parseInt(Math.min(t0[1], t1[1], t2[1]))),
   ]
   let bbmax = [
-    Math.min(width, Math.max(t0[0], t1[0], t2[0])),
-    Math.min(width, Math.max(t0[1], t1[1], t2[1])),
+    Math.min(width, parseInt(Math.max(t0[0], t1[0], t2[0]))),
+    Math.min(width, parseInt(Math.max(t0[1], t1[1], t2[1]))),
   ]
 
-  for (let x = parseInt(bbmin[0]); x <= parseInt(bbmax[0]); x++) {
-    for (let y = parseInt(bbmin[1]); y <= parseInt(bbmax[1]); y++) {
-      let bc = calcBC(t0, t1, t2, [x, y])
+  for (let x = bbmin[0]; x <= bbmax[0]; x++) {
+    for (let y = bbmin[1]; y <= bbmax[1]; y++) {
+      let bc = calcBC(t0, t1, t2, x, y)
+
       if (bc[0] < 0 || bc[1] < 0 || bc[2] < 0) continue
 
       let z = dot([t0[2], t1[2], t2[2]], bc)
-      let zBi = parseInt(x + y * width)
+      let bufferIdx = (width - 1 - y) * width + x
+      if (zBuffer[bufferIdx] > z) continue
 
-      if (zBuffer[zBi] < z) {
-        zBuffer[zBi] = z
+      zBuffer[bufferIdx] = z
 
-        if (diffData) {
-          let u = parseInt(
-            dot(
-              diffData.vt.map(k => k[0]),
-              bc,
-            ),
-          )
-          let v = parseInt(
-            dot(
-              diffData.vt.map(k => k[1]),
-              bc,
-            ),
-          )
+      let normal = normalize(matmul([bc], normals)[0])
+      let intensity = Math.max(dot(normal, lightDir), 0)
 
-          let k = u + (1024 - v) * 1024
-          color[0] = diffData.imageData[4 * k]
-          color[1] = diffData.imageData[4 * k + 1]
-          color[2] = diffData.imageData[4 * k + 2]
-        }
-        putPixel(x, y, data, color, width)
-      }
+      let u = parseInt(
+        dot(
+          diffData.vt.map(k => k[0]),
+          bc,
+        ),
+      )
+      let v = parseInt(
+        dot(
+          diffData.vt.map(k => k[1]),
+          bc,
+        ),
+      )
+
+      let k = 4 * (u + (1023 - v) * 1024)
+
+      data[bufferIdx * 4] = diffData.imageData[k] * intensity
+      data[bufferIdx * 4 + 1] = diffData.imageData[k + 1] * intensity
+      data[bufferIdx * 4 + 2] = diffData.imageData[k + 2] * intensity
+      data[bufferIdx * 4 + 3] = 255
     }
   }
 }
 
-import TGALoader from "tga-js"
-
 //TODO: separate data loader vs drawer.
 export function drawModelWithZBuffer(data, color, width, diffuse) {
+  let resourceLoaderTime = new Date()
+
   let diffuseLoad =
     diffuse &&
     new Promise(resolve => {
@@ -90,7 +101,11 @@ export function drawModelWithZBuffer(data, color, width, diffuse) {
 
   let modelLoad = parseModel()
 
-  return Promise.all([modelLoad, diffuseLoad]).then(([[vertices, faces, vts], diff]) => {
+  return Promise.all([modelLoad, diffuseLoad]).then(([[vertices, faces, vts, vns], diff]) => {
+    console.log("resource load: ", new Date() - resourceLoaderTime, "ms")
+
+    let renderTime = new Date()
+
     let zBuffer = [...Array(data.length).keys()].map(_ => -Infinity)
     let diffSize = [diff.header.width, diff.header.height]
     let diffData = {
@@ -98,8 +113,8 @@ export function drawModelWithZBuffer(data, color, width, diffuse) {
       vt: [],
     }
 
-    let cameraPosition = [2, 0, 2]
-    let cameraUp = normalize([1, 1, 0])
+    let cameraPosition = [0, 0, 4]
+    let cameraUp = normalize([0, 1, 0])
     let cameraLookAt = [0, 0, 0]
 
     let modelView = calcModelViewMatrix(cameraPosition, cameraUp, cameraLookAt)
@@ -107,29 +122,28 @@ export function drawModelWithZBuffer(data, color, width, diffuse) {
 
     // FIXME: the depth resolution affects brightness now.
     // might need normalizing value somewhere.
-    let viewport = calcViewportMatrix(100, -100, width, width, width / 2)
+    let viewport = calcViewportMatrix(0, 0, width, width, width / 2)
 
     let combined = [viewport, perspective, modelView].reduce((acc, m) => matmul(acc, m), identity_4)
+    let combinedNormal = inverse(transpose(combined))
 
     for (let f of faces) {
       let [t0, t1, t2] = f.v.map(vi => mToV(matmul(combined, columnVector([...vertices[vi], 1]))))
 
-      let t02 = subtract(t2, t0)
-      let t01 = subtract(t1, t0)
-      let normal = normalize(cross(t01, t02))
-      let intensity = dot(normal, lightDir)
-
-      if (intensity <= 0) continue
+      let normals = f.v.map(vi =>
+        matmul(combinedNormal, columnVector([...vns[vi], 0]))
+          .slice(0, 3)
+          .map(v => v[0]),
+      )
 
       let [vt0, vt1, vt2] = f.vt.map(vti => vts[vti].map((v, i) => v * diffSize[i]))
-
       diffData.vt[0] = vt0
       diffData.vt[1] = vt1
       diffData.vt[2] = vt2
 
-      color[3] = 255 * intensity
-      triangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width, diffData)
+      triangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width, diffData, normals, lightDir)
     }
+    console.log("rendering :", new Date() - renderTime, "ms")
   })
 }
 
