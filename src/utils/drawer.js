@@ -57,8 +57,7 @@ function triangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width, diffData, 
 
       zBuffer[bufferIdx] = z
 
-      let normal = normalize(matmul([bc], normals)[0])
-      let intensity = Math.max(dot(normal, lightDir), 0)
+      let intensity = dot(varyingIntensity, bc)
 
       let u = parseInt(
         dot(
@@ -125,23 +124,25 @@ export function drawModelWithZBuffer(data, color, width, diffuse) {
     let viewport = calcViewportMatrix(0, 0, width, width, width / 2)
 
     let combined = [viewport, perspective, modelView].reduce((acc, m) => matmul(acc, m), identity_4)
-    let combinedNormal = inverse(transpose(combined))
+    // using transposed value below.
+    let combinedNormalTr = inverse(combined)
 
     for (let f of faces) {
       let [t0, t1, t2] = f.v.map(vi => mToV(matmul(combined, columnVector([...vertices[vi], 1]))))
+      let normals = matmul(
+        f.v.map(vi => [...vns[vi], 0]),
+        combinedNormalTr,
+      ).map(n => normalize(n.slice(0, 3)))
 
-      let normals = f.v.map(vi =>
-        matmul(combinedNormal, columnVector([...vns[vi], 0]))
-          .slice(0, 3)
-          .map(v => v[0]),
-      )
+      // matmul is not faster in here, and avoiding flatten and transpose
+      let varyingIntensity = normals.map(n => Math.max(0, dot(n, lightDir)))
 
       let [vt0, vt1, vt2] = f.vt.map(vti => vts[vti].map((v, i) => v * diffSize[i]))
       diffData.vt[0] = vt0
       diffData.vt[1] = vt1
       diffData.vt[2] = vt2
 
-      triangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width, diffData, normals, lightDir)
+      triangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width, diffData, varyingIntensity)
     }
     console.log("rendering :", new Date() - renderTime, "ms")
   })
