@@ -1,5 +1,16 @@
 {
+  "name": "tinyrenderer-js",
+  "version": "1.0.0",
+  "description": "Tinyrenderer implemented in JS",
+  "main": "index.js",
+  "scripts": {
+    "start": "parcel ./src/index.html"
+  },
   "dependencies": {
+    "parcel-bundler": "^1.12.4",
     "tga-js": "^1.1.1"
-  }
+  },
+  "repository": "https://github.com/jj-143/tinyrenderer-js",
+  "author": "JJ Kim <jj.dev.001@gmail.com>",
+  "license": "MIT"
 }
