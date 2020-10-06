@@ -1,5 +1,5 @@
 import { triangleWithZBuffer } from "./utils/drawer"
-import { GouraudShader } from "./utils/shaders"
+import { GouraudShader, ShaderWithTexture } from "./utils/shaders"
 import { identity_4, matmul, neg, normalize } from "./utils/vecOps"
 import { calcModelViewMatrix, calcPerspectiveMatrix, calcViewportMatrix } from "./utils/utils"
 import { parseModel } from "./utils/parser"
@@ -45,7 +45,7 @@ Promise.all([parseModel(), loadTGA(diffuseMap)]).then(([[vertices, faces, vts, v
   }
   console.log("resource load: ", new Date() - resourceLoaderTime, "ms")
 
-  let shader = new GouraudShader(combined, res, lightDir)
+  let shader = new ShaderWithTexture(combined, res, lightDir)
 
   let renderingTime = new Date()
 
