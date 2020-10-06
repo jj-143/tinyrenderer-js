@@ -1,19 +1,6 @@
-import { getVF, parseModel, read } from "./parser"
+import { getVF, _fetch } from "./parser"
 
-import TGALoader from "tga-js"
-import {
-  columnVector,
-  dot,
-  cross,
-  normalize,
-  subtract,
-  neg,
-  matmul,
-  identity_4,
-  mToV,
-  transpose,
-  inverse,
-} from "./vecOps"
+import { dot, cross, normalize, subtract, neg, matmul, identity_4, inverse } from "./vecOps"
 import { calcBC, calcModelViewMatrix, calcPerspectiveMatrix, calcViewportMatrix } from "./utils"
 
 export function putPixel(x, y, data, rgba, width) {
@@ -31,31 +18,37 @@ export function putPixel(x, y, data, rgba, width) {
 // reflection at the model's surface.
 let lightDir = neg(normalize([0, 0, -1]))
 
-//TODO: light도 transform 해야 하나 해서 11시 방향으로 해준것. [-1, 0, -1]
-// 근데 정작 계산시 노말들은 변형 후 화면을 바라보는 방향으로 변화된거고
-// 그냥 화면방향 (직진 [0, 0, -1]) 하면 화면방향 정면으로 빛 방향 (즉 얼굴 측면방향으로 밝게)
-// 되야되는데 이렇게 해야정면에서 준것처럼 나온다.
-function triangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width, diffData, normals, lightDir) {
+export function triangleWithZBuffer(v0, v1, v2, shader, zBuffer, data, width) {
   let bbmin = [
-    Math.max(0, parseInt(Math.min(t0[0], t1[0], t2[0]))),
-    Math.max(0, parseInt(Math.min(t0[1], t1[1], t2[1]))),
+    Math.max(0, parseInt(Math.min(v0[0], v1[0], v2[0]))),
+    Math.max(0, parseInt(Math.min(v0[1], v1[1], v2[1]))),
   ]
   let bbmax = [
-    Math.min(width, parseInt(Math.max(t0[0], t1[0], t2[0]))),
-    Math.min(width, parseInt(Math.max(t0[1], t1[1], t2[1]))),
+    Math.min(width, parseInt(Math.max(v0[0], v1[0], v2[0]))),
+    Math.min(width, parseInt(Math.max(v0[1], v1[1], v2[1]))),
   ]
 
   for (let x = bbmin[0]; x <= bbmax[0]; x++) {
     for (let y = bbmin[1]; y <= bbmax[1]; y++) {
-      let bc = calcBC(t0, t1, t2, x, y)
+      let bc = calcBC(v0, v1, v2, x, y)
 
       if (bc[0] < 0 || bc[1] < 0 || bc[2] < 0) continue
 
-      let z = dot([t0[2], t1[2], t2[2]], bc)
+      let z = dot([v0[2], v1[2], v2[2]], bc)
       let bufferIdx = (width - 1 - y) * width + x
       if (zBuffer[bufferIdx] > z) continue
 
-      zBuffer[bufferIdx] = z
+      let color = [0, 0, 0, 255]
+      let discard = shader.fragment(bc, color)
+
+      if (!discard) {
+        zBuffer[bufferIdx] = z
+        data[bufferIdx * 4] = color[0]
+        data[bufferIdx * 4 + 1] = color[1]
+        data[bufferIdx * 4 + 2] = color[2]
+        data[bufferIdx * 4 + 3] = color[3]
+      }
+      continue
 
       let intensity = dot(varyingIntensity, bc)
 
@@ -82,23 +75,37 @@ function triangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width, diffData, 
   }
 }
 
-//TODO: separate data loader vs drawer.
-export function drawModelWithZBuffer(data, color, width, diffuse) {
-  let resourceLoaderTime = new Date()
+//
+// Previous lessons, attempts
+//
 
-  let diffuseLoad =
-    diffuse &&
-    new Promise(resolve => {
-      const tgaLoader = new TGALoader()
-      tgaLoader.open(diffuse, () => {
-        resolve({
-          imageData: tgaLoader.getImageData().data,
-          header: tgaLoader.header,
-        })
-      })
-    })
+// deprecated: too little code, do it in the main script
+function renderFace(face, data, shader, zBuffer, width) {
+  let [v0, v1, v2] = face.v.map(vi => shader.vertex(vi))
+  triangleWithZBuffer(v0, v1, v2, shader, zBuffer, data, width)
+  return
 
-  let modelLoad = parseModel()
+  for (let f of faces) {
+    // let [t0, t1, t2] = f.v.map(vi => mToV(matmul(combined, columnVector([...vertices[vi], 1]))))
+    // let normals = matmul(
+    //   f.v.map(vi => [...vns[vi], 0]),
+    //   combinedNormalTr,
+    // ).map(n => normalize(n.slice(0, 3)))
+
+    let screenCoords = f.v.map(shader.vertex)
+
+    // matmul is not faster in here, and avoiding flatten and transpose
+    // let varyingIntensity = normals.map(n => Math.max(0, dot(n, lightDir)))
+
+    // let [vt0, vt1, vt2] = f.vt.map(vti => vts[vti].map((v, i) => v * diffSize[i]))
+    // diffData.vt[0] = vt0
+    // diffData.vt[1] = vt1
+    // diffData.vt[2] = vt2
+
+    triangleWithZBuffer(t0, t1, t2, shader, zBuffer, data, width)
+  }
+  console.log("rendering :", new Date() - renderTime, "ms")
+  return
 
   return Promise.all([modelLoad, diffuseLoad]).then(([[vertices, faces, vts, vns], diff]) => {
     console.log("resource load: ", new Date() - resourceLoaderTime, "ms")
@@ -126,31 +133,8 @@ export function drawModelWithZBuffer(data, color, width, diffuse) {
     let combined = [viewport, perspective, modelView].reduce((acc, m) => matmul(acc, m), identity_4)
     // using transposed value below.
     let combinedNormalTr = inverse(combined)
-
-    for (let f of faces) {
-      let [t0, t1, t2] = f.v.map(vi => mToV(matmul(combined, columnVector([...vertices[vi], 1]))))
-      let normals = matmul(
-        f.v.map(vi => [...vns[vi], 0]),
-        combinedNormalTr,
-      ).map(n => normalize(n.slice(0, 3)))
-
-      // matmul is not faster in here, and avoiding flatten and transpose
-      let varyingIntensity = normals.map(n => Math.max(0, dot(n, lightDir)))
-
-      let [vt0, vt1, vt2] = f.vt.map(vti => vts[vti].map((v, i) => v * diffSize[i]))
-      diffData.vt[0] = vt0
-      diffData.vt[1] = vt1
-      diffData.vt[2] = vt2
-
-      triangleWithZBuffer(t0, t1, t2, zBuffer, data, color, width, diffData, varyingIntensity)
-    }
-    console.log("rendering :", new Date() - renderTime, "ms")
   })
 }
-
-//
-// Previous lessons, attempts
-//
 
 function line1(p1, p2, data, rgba, width) {
   let [x1, y1] = p1
@@ -242,7 +226,7 @@ function line3(p1, p2, data, rgba, width) {
 export { line3 as line }
 
 function drawModel(data, width, color) {
-  return read().then(lines => {
+  return _fetch().then(lines => {
     let [vertices, faces] = getVF(lines, width / 2)
 
     for (let f of faces) {
