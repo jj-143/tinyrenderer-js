@@ -1,5 +1,5 @@
 {
   "dependencies": {
-    "tga-js": "../tga.js"
+    "tga-js": "^1.1.1"
   }
 }

@@ -2,5 +2,7 @@
 # yarn lockfile v1
 
 
-tga-js@../tga.js:
-  version "1.1.0"
+tga-js@^1.1.1:
+  version "1.1.1"
+  resolved "https://registry.yarnpkg.com/tga-js/-/tga-js-1.1.1.tgz#4b2f329f2e693117cb8ccf25dcf7723f4779d333"
+  integrity sha512-2EcbDHfFCggAt0DLjUwZzKaQGaCmcQZBQrYscVnWjxzl+2Q1PFp1ABsO2UVevF1pTi2t9mmWkzPaQqUeJA+mhA==
