@@ -1,5 +1,10 @@
 import { triangleWithZBuffer } from "./utils/drawer"
-import { GouraudShader, ShaderWithTexture, TextureAndNormalMap } from "./utils/shaders"
+import {
+  GouraudShader,
+  ShaderWithTexture,
+  DiffuseNormalSpecular,
+  TextureAndNormalMap,
+} from "./utils/shaders"
 import {
   columnVector,
   identity_4,
@@ -48,11 +53,12 @@ let zBuffer = [...Array(data.length).keys()].map(_ => -Infinity)
 
 import diffuseMap from "./obj/african_head_diffuse.tga"
 import nm from "./obj/african_head_nm.tga"
+import spec from "./obj/african_head_spec.tga"
 
 // render
 let resourceLoaderTime = new Date()
-Promise.all([parseModel(), loadTGA(diffuseMap), loadTGA(nm)]).then(
-  ([[vertices, faces, vts, vns], diffuse, normalMap]) => {
+Promise.all([parseModel(), loadTGA(diffuseMap), loadTGA(nm), loadTGA(spec)]).then(
+  ([[vertices, faces, vts, vns], diffuse, normalMap, spec]) => {
     let res = {
       vertices,
       faces,
@@ -60,10 +66,11 @@ Promise.all([parseModel(), loadTGA(diffuseMap), loadTGA(nm)]).then(
       vns,
       diffuse,
       normalMap,
+      spec,
     }
     console.log("resource load: ", new Date() - resourceLoaderTime, "ms")
 
-    let shader = new TextureAndNormalMap(combined, res, lightDir, uniM, uniMIT)
+    let shader = new DiffuseNormalSpecular(combined, res, lightDir, uniM, uniMIT)
 
     let renderingTime = new Date()
 
