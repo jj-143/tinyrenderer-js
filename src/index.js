@@ -1,10 +1,5 @@
 import { triangleWithZBuffer } from "./utils/drawer"
-import {
-  GouraudShader,
-  ShaderWithTexture,
-  DiffuseNormalSpecular,
-  TextureAndNormalMap,
-} from "./utils/shaders"
+import { DiffuseTangentNormalSpecular } from "./utils/shaders"
 import {
   columnVector,
   identity_4,
@@ -54,36 +49,44 @@ let zBuffer = [...Array(data.length).keys()].map(_ => -Infinity)
 import diffuseMap from "./obj/african_head_diffuse.tga"
 import nm from "./obj/african_head_nm.tga"
 import spec from "./obj/african_head_spec.tga"
+import tangentNM from "./obj/african_head_nm_tangent.tga"
 
 // render
 let resourceLoaderTime = new Date()
-Promise.all([parseModel(), loadTGA(diffuseMap), loadTGA(nm), loadTGA(spec)]).then(
-  ([[vertices, faces, vts, vns], diffuse, normalMap, spec]) => {
-    let res = {
-      vertices,
-      faces,
-      vts,
-      vns,
-      diffuse,
-      normalMap,
-      spec,
+Promise.all([
+  parseModel(),
+  loadTGA(diffuseMap),
+  loadTGA(nm),
+  loadTGA(spec),
+  loadTGA(tangentNM),
+]).then(([[vertices, faces, vts, vns], diffuse, normalMap, spec, tangentNM]) => {
+  let res = {
+    vertices,
+    faces,
+    vts,
+    vns,
+    diffuse,
+    normalMap,
+    spec,
+    tangentNM,
+  }
+  console.log("resource load: ", new Date() - resourceLoaderTime, "ms")
+
+  let shader = new DiffuseTangentNormalSpecular(combined, res, lightDir, uniM, uniMIT)
+
+  let renderingTime = new Date()
+
+  let viewportTr = transpose(viewport)
+
+  // little change to sig. of shader.vertex due to the resource structure
+  for (let fi = 0; fi < faces.length; fi++) {
+    let coords = []
+    for (let vi = 0; vi < 3; vi++) {
+      coords[vi] = shader.vertex(fi, vi)
     }
-    console.log("resource load: ", new Date() - resourceLoaderTime, "ms")
+    triangleWithZBuffer(...coords, shader, zBuffer, data, w, viewportTr)
+  }
 
-    let shader = new DiffuseNormalSpecular(combined, res, lightDir, uniM, uniMIT)
-
-    let renderingTime = new Date()
-
-    // little change to sig. of shader.vertex due to the resource structure
-    for (let fi = 0; fi < faces.length; fi++) {
-      let coords = []
-      for (let vi = 0; vi < 3; vi++) {
-        coords[vi] = shader.vertex(fi, vi)
-      }
-      triangleWithZBuffer(...coords, shader, zBuffer, data, w)
-    }
-
-    console.log("rendering took: ", new Date() - renderingTime, "ms")
-    ctx.putImageData(imgData, 0, 0)
-  },
-)
+  console.log("rendering took: ", new Date() - renderingTime, "ms")
+  ctx.putImageData(imgData, 0, 0)
+})

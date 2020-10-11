@@ -1,6 +1,6 @@
 import { getVF, _fetch } from "./parser"
 
-import { dot, cross, normalize, subtract, neg, matmul, identity_4, inverse } from "./vecOps"
+import { dot, cross, normalize, subtract, neg, matmul, identity_4, inverse, vecdiv } from "./vecOps"
 import { calcBC, calcModelViewMatrix, calcPerspectiveMatrix, calcViewportMatrix } from "./utils"
 
 export function putPixel(x, y, data, rgba, width) {
@@ -18,7 +18,10 @@ export function putPixel(x, y, data, rgba, width) {
 // reflection at the model's surface.
 let lightDir = neg(normalize([0, 0, -1]))
 
-export function triangleWithZBuffer(v0, v1, v2, shader, zBuffer, data, width) {
+export function triangleWithZBuffer(v0, v1, v2, shader, zBuffer, data, width, viewportTr) {
+  // apply viewport, div by aug here
+  ;[v0, v1, v2] = matmul([v0, v1, v2], viewportTr).map(v => vecdiv(v.slice(0, 3), v[3]))
+
   let bbmin = [
     Math.max(0, parseInt(Math.min(v0[0], v1[0], v2[0]))),
     Math.max(0, parseInt(Math.min(v0[1], v1[1], v2[1]))),
@@ -34,7 +37,14 @@ export function triangleWithZBuffer(v0, v1, v2, shader, zBuffer, data, width) {
 
       if (bc[0] < 0 || bc[1] < 0 || bc[2] < 0) continue
 
+      // NOTE: ssloy uses sum of weighted z,
+      // depth = sum(z) / sum(w: 4th value)
+      // whereas I (and in his previous lessons)
+      // use sum of z divided by aug value.
+      // the render doesn't change visually, perhaps lack of many competing
+      // z values in this model / scene.
       let z = dot([v0[2], v1[2], v2[2]], bc)
+
       let bufferIdx = (width - 1 - y) * width + x
       if (zBuffer[bufferIdx] > z) continue
 
