@@ -1,19 +1,8 @@
 import { triangleWithZBuffer } from "./utils/drawer"
 import { DiffuseTangentNormalSpecular } from "./utils/shaders"
-import {
-  columnVector,
-  identity_4,
-  inverse,
-  matmul,
-  mToV,
-  neg,
-  normalize,
-  transpose,
-} from "./utils/vecOps"
+import { subtract, identity_4, inverse, matmul, neg, normalize, transpose } from "./utils/vecOps"
 import { calcModelViewMatrix, calcPerspectiveMatrix, calcViewportMatrix } from "./utils/utils"
-import { parseModel } from "./utils/parser"
-
-import { loadTGA } from "./utils/loader"
+import { loadModel, loadTGA } from "./utils/loader"
 
 // setup
 const canvas = document.getElementById("app")
@@ -31,21 +20,19 @@ let cameraLookAt = [0, 0, 0]
 let lightDir = neg(normalize([-1, -1, -1]))
 
 let modelView = calcModelViewMatrix(cameraPosition, cameraUp, cameraLookAt)
-//FIXME: it should be eye - center. coeff = -1 / (eye - center)
-let perspective = calcPerspectiveMatrix(cameraPosition)
+let perspective = calcPerspectiveMatrix(subtract(cameraPosition, cameraLookAt))
 let viewport = calcViewportMatrix(0, 0, w, w, 255)
-
-let combined = [viewport, perspective, modelView].reduce((acc, m) => matmul(acc, m), identity_4)
 
 // without viewport, based on ssloy's code.
 // guess I shouldn't apply viewport to direction vectors?
 // using combined(light) & combinedIT(normal) generates 'greasy' look
-// + this also removes brightness changes by viewport's depth value
 let uniM = [perspective, modelView].reduce((acc, m) => matmul(acc, m), identity_4)
 let uniMIT = inverse(transpose(uniM))
+let viewportTr = transpose(viewport)
 
 let zBuffer = [...Array(data.length).keys()].map(_ => -Infinity)
 
+import modelHead from "./obj/african_head.obj"
 import diffuseMap from "./obj/african_head_diffuse.tga"
 import nm from "./obj/african_head_nm.tga"
 import spec from "./obj/african_head_spec.tga"
@@ -54,7 +41,7 @@ import tangentNM from "./obj/african_head_nm_tangent.tga"
 // render
 let resourceLoaderTime = new Date()
 Promise.all([
-  parseModel(),
+  loadModel(modelHead),
   loadTGA(diffuseMap),
   loadTGA(nm),
   loadTGA(spec),
@@ -72,15 +59,12 @@ Promise.all([
   }
   console.log("resource load: ", new Date() - resourceLoaderTime, "ms")
 
-  let shader = new DiffuseTangentNormalSpecular(combined, res, lightDir, uniM, uniMIT)
+  let shader = new DiffuseTangentNormalSpecular(res, lightDir, uniM, uniMIT)
+  let coords = []
 
   let renderingTime = new Date()
-
-  let viewportTr = transpose(viewport)
-
   // little change to sig. of shader.vertex due to the resource structure
   for (let fi = 0; fi < faces.length; fi++) {
-    let coords = []
     for (let vi = 0; vi < 3; vi++) {
       coords[vi] = shader.vertex(fi, vi)
     }

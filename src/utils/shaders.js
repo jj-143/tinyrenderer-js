@@ -3,7 +3,6 @@ import {
   dot,
   columnVector,
   matmul,
-  mToV,
   normalize,
   subtract,
   transpose,
@@ -11,11 +10,11 @@ import {
 } from "./vecOps"
 
 export class GouraudShader {
-  constructor(combinedMatrix, res, lightDir) {
-    this.varyingIntensity = []
-    this.combinedMatrix = combinedMatrix
+  constructor(res, lightDir, uniM) {
     this.res = res
     this.lightDir = lightDir
+    this.uniM = uniM
+    this.varyingIntensity = []
   }
 
   vertex(fi, vi) {
@@ -23,7 +22,7 @@ export class GouraudShader {
     let vertex = this.res.vertices[vertexNumber]
     let vertexNormal = this.res.vns[vertexNumber]
 
-    let coord = mToV(matmul(this.combinedMatrix, columnVector([...vertex, 1])))
+    let coord = matmul(this.uniM, columnVector([...vertex, 1])).map(v => v[0])
     this.varyingIntensity[vi] = Math.max(0, dot(vertexNormal, this.lightDir))
     return coord
   }
@@ -39,15 +38,15 @@ export class GouraudShader {
 
 // Texture + Intensity by light * interpolated vertex normal
 export class ShaderWithTexture {
-  constructor(combinedMatrix, res, lightDir) {
-    this.varyingIntensity = []
-    this.varyingVertexTextureUV = []
-    this.combinedMatrix = combinedMatrix
+  constructor(res, lightDir, uniM) {
     this.res = res
     this.lightDir = lightDir
+    this.uniM = uniM
 
     this.diffuseW = this.res.diffuse.header.width
     this.diffuseH = this.res.diffuse.header.height
+    this.varyingIntensity = []
+    this.varyingVertexTextureUV = []
   }
 
   vertex(fi, vi) {
@@ -55,18 +54,17 @@ export class ShaderWithTexture {
     let vertex = this.res.vertices[vertexNumber]
     let vertexNormal = this.res.vns[vertexNumber]
 
-    let coord = mToV(matmul(this.combinedMatrix, columnVector([...vertex, 1])))
+    let coord = matmul(this.uniM, columnVector([...vertex, 1])).map(v => v[0])
     this.varyingIntensity[vi] = Math.max(0, dot(vertexNormal, this.lightDir))
 
     let vertexTextureNumber = this.res.faces[fi].vt[vi]
-    let uv = this.res.vts[vertexTextureNumber]
-    this.varyingVertexTextureUV[vi] = [uv[0] * this.diffuseW, uv[1] * this.diffuseH]
+    this.varyingVertexTextureUV[vi] = this.res.vts[vertexTextureNumber]
     return coord
   }
 
   fragment(bc, color) {
     let intensity = dot(this.varyingIntensity, bc)
-    let [u, v] = matmul([bc], this.varyingVertexTextureUV)[0].map(v => parseInt(v))
+    let [u, v] = matmul([bc], this.varyingVertexTextureUV)[0].map(v => parseInt(v * 1024))
     let k = u + (this.diffuseH - 1 - v) * this.diffuseW
     color[0] = this.res.diffuse.imageData[4 * k] * intensity
     color[1] = this.res.diffuse.imageData[4 * k + 1] * intensity
@@ -76,34 +74,30 @@ export class ShaderWithTexture {
 }
 
 export class TextureAndNormalMap {
-  constructor(combinedMatrix, res, lightDir, uniM, uniMIT) {
-    this.varyingVertexTextureUV = []
-    this.combinedMatrix = combinedMatrix
+  constructor(res, lightDir, uniM, uniMIT) {
     this.res = res
     this.lightDir = lightDir
+    this.uniM = uniM
+    this.uniMIT = uniMIT
 
     this.diffuseW = this.res.diffuse.header.width
     this.diffuseH = this.res.diffuse.header.height
-
-    this.uniM = uniM
-    this.uniMIT = uniMIT
+    this.varyingVertexTextureUV = []
     this.lightDirTrx = normalize(matmul(this.uniM, columnVector([...lightDir, 1])).slice(0, 3))
   }
 
   vertex(fi, vi) {
     let vertexNumber = this.res.faces[fi].v[vi]
     let vertex = this.res.vertices[vertexNumber]
-    let coord = mToV(matmul(this.combinedMatrix, columnVector([...vertex, 1])))
+    let coord = matmul(this.uniM, columnVector([...vertex, 1])).map(v => v[0])
 
     let vertexTextureNumber = this.res.faces[fi].vt[vi]
-    let uv = this.res.vts[vertexTextureNumber]
-    this.varyingVertexTextureUV[vi] = [uv[0] * this.diffuseW, uv[1] * this.diffuseH]
+    this.varyingVertexTextureUV[vi] = this.res.vts[vertexTextureNumber]
     return coord
   }
 
   fragment(bc, color) {
-    let [u, v] = matmul([bc], this.varyingVertexTextureUV)[0].map(v => parseInt(v))
-
+    let [u, v] = matmul([bc], this.varyingVertexTextureUV)[0].map(v => parseInt(v * 1024))
     let k = u + (this.diffuseH - 1 - v) * this.diffuseW
 
     let normalData = normalize(
@@ -151,17 +145,15 @@ export class DiffuseNormalSpecular {
   vertex(fi, vi) {
     let vertexNumber = this.res.faces[fi].v[vi]
     let vertex = this.res.vertices[vertexNumber]
-    let coord = mToV(matmul(this.combinedMatrix, columnVector([...vertex, 1])))
+    let coord = matmul(this.uniM, columnVector([...vertex, 1])).map(v => v[0])
 
     let vertexTextureNumber = this.res.faces[fi].vt[vi]
-    let uv = this.res.vts[vertexTextureNumber]
-    this.varyingVertexTextureUV[vi] = [uv[0] * this.diffuseW, uv[1] * this.diffuseH]
+    this.varyingVertexTextureUV[vi] = this.res.vts[vertexTextureNumber]
     return coord
   }
 
   fragment(bc, color) {
-    let [u, v] = matmul([bc], this.varyingVertexTextureUV)[0].map(v => parseInt(v))
-
+    let [u, v] = matmul([bc], this.varyingVertexTextureUV)[0].map(v => parseInt(v * 1024))
     let k = u + (this.diffuseH - 1 - v) * this.diffuseW
 
     let normalData = normalize(
@@ -191,12 +183,11 @@ export class DiffuseNormalSpecular {
     // spec is 1024 * 1024 * 8bit data but TGALoader reads 32bits as [v,v,v,255]
     let specData = this.res.spec.imageData[4 * k]
     let spec = Math.max(0, reflection[2]) ** specData
-    spec = 0
     let value = diff + spec * 0.6
-    color[0] = value * 255
-    color[1] = value * 255
-    color[2] = value * 255
-    color[3] = this.res.diffuse.imagedata[4 * k + 3]
+    color[0] = Math.min(255, 5 + this.res.diffuse.imageData[4 * k] * value)
+    color[1] = Math.min(255, 5 + this.res.diffuse.imageData[4 * k + 1] * value)
+    color[2] = Math.min(255, 5 + this.res.diffuse.imageData[4 * k + 2] * value)
+    color[3] = this.res.diffuse.imageData[4 * k + 3]
     return false
   }
 }
@@ -209,21 +200,18 @@ export class DiffuseNormalSpecular {
  * https://learnopengl.com/Advanced-Lighting/Normal-Mapping
  */
 export class DiffuseTangentNormalSpecular {
-  constructor(combinedMatrix, res, lightDir, uniM, uniMIT) {
-    this.varyingVertexTextureUV = []
-    this.combinedMatrix = combinedMatrix
+  constructor(res, lightDir, uniM, uniMIT) {
     this.res = res
     this.lightDir = lightDir
+    this.uniM = uniM
+    this.uniMIT = uniMIT
 
     this.diffuseW = this.res.diffuse.header.width
     this.diffuseH = this.res.diffuse.header.height
-
-    this.uniM = uniM
-    this.uniMIT = uniMIT
-    this.lightDirTrx = normalize(matmul(this.uniM, columnVector([...lightDir, 1])).slice(0, 3))
-
+    this.varyingVertexTextureUV = []
     this.vertexNormals = []
     this.varyingCoord = []
+    this.lightDirTrx = normalize(matmul(this.uniM, columnVector([...lightDir, 1])).slice(0, 3))
   }
 
   vertex(fi, vi) {
@@ -233,12 +221,12 @@ export class DiffuseTangentNormalSpecular {
     // apply viewport after, only proj, modelview here
     // it doesn't feel right to apply viewport here
     // since coordinate values are used to calculate
+    // TNB matrix
     let coords = matmul(this.uniM, columnVector([...vertex, 1])).map(v => v[0])
     this.varyingCoord[vi] = coords
 
     let vertexTextureNumber = this.res.faces[fi].vt[vi]
-    let uv = this.res.vts[vertexTextureNumber]
-    this.varyingVertexTextureUV[vi] = [uv[0], uv[1]]
+    this.varyingVertexTextureUV[vi] = this.res.vts[vertexTextureNumber]
 
     this.vertexNormals[vi] = normalize(
       matmul(this.uniMIT, columnVector([...this.res.vns[this.res.faces[fi].vn[vi]], 0]))

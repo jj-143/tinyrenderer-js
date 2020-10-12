@@ -1,9 +1,9 @@
 import { matmul, cross, normalize, subtract } from "./vecOps"
 
-export function calcBC(v1, v2, v3, x, y) {
+export function barycentric(v0, v1, v2, x, y) {
   let u = cross(
-    [v3[0] - v1[0], v2[0] - v1[0], v1[0] - x],
-    [v3[1] - v1[1], v2[1] - v1[1], v1[1] - y],
+    [v2[0] - v0[0], v1[0] - v0[0], v0[0] - x],
+    [v2[1] - v0[1], v1[1] - v0[1], v0[1] - y],
   )
   if (Math.abs(u[2]) < 1) return [-1, 0, 0]
   return [1 - (u[0] + u[1]) / u[2], u[1] / u[2], u[0] / u[2]]
@@ -56,7 +56,7 @@ export function calcViewportMatrix(x, y, width, height, d = 255) {
   return [
     [width / 2, 0, 0, x + width / 2],
     [0, height / 2, 0, y + height / 2],
-    [0, 0, d, d / 2],
+    [0, 0, d / 2, d / 2],
     [0, 0, 0, 1],
   ]
 }
