@@ -37,10 +37,11 @@ export function getVF(lines, halfW) {
           .map(v => Number(v)),
       )
     } else if (type === "f") {
-      let matches = Array.from(line.matchAll(/ (\d+)\/(\d+)\//g))
+      let matches = Array.from(line.matchAll(/ (\d+)\/(\d+)\/(\d+)/g))
       let face = {
         v: matches.map(m => Number(m[1]) - 1),
         vt: matches.map(m => Number(m[2]) - 1),
+        vn: matches.map(m => Number(m[3]) - 1),
       }
       fs.push(face)
     }
