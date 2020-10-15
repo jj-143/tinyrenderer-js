@@ -12,6 +12,18 @@ export const normalize = v => {
   let length = abs(v)
   return v.map(i => i / length)
 }
+
+/**
+ * normalize **inplace**
+ */
+export const iNormalize3 = v => {
+  let len = Math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2)
+  v[0] /= len
+  v[1] /= len
+  v[2] /= len
+  return v
+}
+
 export const neg = v => v.map(i => -i)
 
 /**
@@ -35,6 +47,15 @@ export const determinant = m => {
     0,
   )
 }
+
+export const determinant3 = m => {
+  return (
+    m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+    m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+    m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+  )
+}
+
 const adj = m => {
   return m.map((row, i) =>
     row.map((_, j) => ((i + j) % 2 ? -1 : 1) * determinant(removedRowCol(m, j, i))),
@@ -48,6 +69,33 @@ export const inverse = m => {
   return adj(m).map(v => vecdiv(v, det))
 }
 
+// this reduces render time significantly as
+// opposed to using inverse()
+export const inverse3 = m => {
+  let det =
+    m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+    m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+    m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+
+  return [
+    [
+      (m[1][1] * m[2][2] - m[1][2] * m[2][1]) / det,
+      (-m[0][1] * m[2][2] + m[0][2] * m[2][1]) / det,
+      (m[0][1] * m[1][2] - m[0][2] * m[1][1]) / det,
+    ],
+    [
+      (-m[1][0] * m[2][2] + m[1][2] * m[2][0]) / det,
+      (m[0][0] * m[2][2] - m[0][2] * m[2][0]) / det,
+      (-m[0][0] * m[1][2] + m[0][2] * m[1][0]) / det,
+    ],
+    [
+      (m[1][0] * m[2][1] - m[1][1] * m[2][0]) / det,
+      (-m[0][0] * m[2][1] + m[0][1] * m[2][0]) / det,
+      (m[0][0] * m[1][1] - m[0][1] * m[1][0]) / det,
+    ],
+  ]
+}
+
 export const columnVector = a => {
   return a.map(v => [v])
 }
@@ -59,6 +107,23 @@ export const transpose = a => {
   if (n === undefined) return a.map(v => [v])
 
   return [...Array(n).keys()].map(i => [...Array(m).keys()].map(j => a[j][i]))
+}
+
+export const matmulvec = (m, v) => {
+  return [
+    m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2],
+    m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2],
+    m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2],
+  ]
+}
+
+export const matmulvec4aug = (m, v, aug) => {
+  return [
+    m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2] + m[0][3] * aug,
+    m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2] + m[1][3] * aug,
+    m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2] + m[2][3] * aug,
+    m[3][0] * v[0] + m[3][1] * v[1] + m[3][2] * v[2] + m[3][3] * aug,
+  ]
 }
 
 export const matmul4 = (a, b) => {

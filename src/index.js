@@ -1,5 +1,5 @@
 import { triangleWithZBuffer } from "./utils/drawer"
-import { DiffuseTangentNormalSpecular } from "./utils/shaders"
+import { FastDiffuseTangentNormalSpecular } from "./utils/shaders"
 import { subtract, identity_4, inverse, matmul, neg, normalize, transpose } from "./utils/vecOps"
 import { calcModelViewMatrix, calcPerspectiveMatrix, calcViewportMatrix } from "./utils/utils"
 import { loadModel, loadTGA } from "./utils/loader"
@@ -59,7 +59,7 @@ Promise.all([
   }
   console.log("resource load: ", new Date() - resourceLoaderTime, "ms")
 
-  let shader = new DiffuseTangentNormalSpecular(res, lightDir, uniM, uniMIT)
+  let shader = new FastDiffuseTangentNormalSpecular(res, lightDir, uniM, uniMIT)
   let coords = []
 
   let renderingTime = new Date()
