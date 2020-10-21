@@ -41,7 +41,7 @@ export function calcPerspectiveMatrix(c) {
     [1, 0, 0, 0],
     [0, 1, 0, 0],
     [0, 0, 1, 0],
-    [0, 0, -1 / c[2], 1],
+    [0, 0, -1 / c, 1],
   ]
 }
 

@@ -1,6 +1,15 @@
 import { triangleWithZBuffer } from "./utils/drawer"
 import { FastDiffuseTangentNormalSpecular } from "./utils/shaders"
-import { subtract, identity_4, inverse, matmul, neg, normalize, transpose } from "./utils/vecOps"
+import {
+  subtract,
+  identity_4,
+  inverse,
+  matmul,
+  neg,
+  normalize,
+  transpose,
+  abs,
+} from "./utils/vecOps"
 import { calcModelViewMatrix, calcPerspectiveMatrix, calcViewportMatrix } from "./utils/utils"
 import { loadModel, loadTGA } from "./utils/loader"
 
@@ -20,7 +29,7 @@ let cameraLookAt = [0, 0, 0]
 let lightDir = neg(normalize([-1, -1, -1]))
 
 let modelView = calcModelViewMatrix(cameraPosition, cameraUp, cameraLookAt)
-let perspective = calcPerspectiveMatrix(subtract(cameraPosition, cameraLookAt))
+let perspective = calcPerspectiveMatrix(abs(subtract(cameraPosition, cameraLookAt)))
 let viewport = calcViewportMatrix(0, 0, w, w, 255)
 
 // without viewport, based on ssloy's code.
