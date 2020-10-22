@@ -2,9 +2,9 @@
   "name": "tinyrenderer-js",
   "version": "1.0.0",
   "description": "Tinyrenderer implemented in JS",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
-    "start": "parcel ./src/index.html"
+    "start": "parcel ./demo/index.html"
   },
   "dependencies": {
     "parcel-bundler": "^1.12.4",

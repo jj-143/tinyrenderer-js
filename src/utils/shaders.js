@@ -2,33 +2,43 @@ import {
   inverse3,
   inverse,
   dot,
-  columnVector,
   matmul,
   matmulvec,
-  normalize,
   subtract,
   transpose,
-  vecdiv,
   iNormalize3,
-  sqrt,
   matmulvec4aug,
 } from "./vecOps"
 
-export class GouraudShader {
-  constructor(res, lightDir, uniM) {
-    this.res = res
-    this.lightDir = lightDir
-    this.uniM = uniM
+class Shader {
+  updateUniform(uniform) {
+    this.uniM = uniform.uniM
+    this.uniMIT = uniform.uniM ? inverse(transpose(this.uniM)) : this.uniMIT
+    this.lightDirTrx =
+      // TMP fix light dir for demo
+      // uniform.uniM || uniform.lightDir
+      !this.lightDirTrx
+        ? iNormalize3(matmulvec4aug(this.uniM, uniform.lightDir, 1).slice(0, 3))
+        : this.lightDirTrx
+  }
+}
+
+export class GouraudShader extends Shader {
+  constructor(uniform) {
+    super()
+    this.model = uniform.model
     this.varyingIntensity = []
   }
 
   vertex(fi, vi) {
-    let vertexNumber = this.res.faces[fi].v[vi]
-    let vertex = this.res.vertices[vertexNumber]
-    let vertexNormal = this.res.vns[vertexNumber]
+    let vertexNumber = this.model.faces[fi].v[vi]
+    let vertex = this.model.vertices[vertexNumber]
+    let vertexNormal = iNormalize3(
+      matmulvec4aug(this.uniMIT, this.model.vns[vertexNumber], 0).slice(0, 3),
+    )
 
     let coord = matmulvec4aug(this.uniM, vertex, 1)
-    this.varyingIntensity[vi] = Math.max(0, dot(vertexNormal, this.lightDir))
+    this.varyingIntensity[vi] = dot(vertexNormal, this.lightDirTrx)
     return coord
   }
 
@@ -42,28 +52,30 @@ export class GouraudShader {
 }
 
 // Texture + Intensity by light * interpolated vertex normal
-export class ShaderWithTexture {
-  constructor(res, lightDir, uniM) {
-    this.res = res
-    this.lightDir = lightDir
-    this.uniM = uniM
+export class ShaderWithTexture extends Shader {
+  constructor(uniform) {
+    super()
+    this.model = uniform.model
+    this.diffuse = uniform.diffuse
 
-    this.diffuseW = this.res.diffuse.header.width
-    this.diffuseH = this.res.diffuse.header.height
+    this.diffuseW = this.diffuse.header.width
+    this.diffuseH = this.diffuse.header.height
     this.varyingIntensity = []
     this.varyingVertexTextureUV = []
   }
 
   vertex(fi, vi) {
-    let vertexNumber = this.res.faces[fi].v[vi]
-    let vertex = this.res.vertices[vertexNumber]
-    let vertexNormal = this.res.vns[vertexNumber]
+    let vertexNumber = this.model.faces[fi].v[vi]
+    let vertex = this.model.vertices[vertexNumber]
+    let vertexNormal = iNormalize3(
+      matmulvec4aug(this.uniMIT, this.model.vns[vertexNumber], 0).slice(0, 3),
+    )
 
     let coord = matmulvec4aug(this.uniM, vertex, 1)
-    this.varyingIntensity[vi] = Math.max(0, dot(vertexNormal, this.lightDir))
+    this.varyingIntensity[vi] = Math.max(0, dot(vertexNormal, this.lightDirTrx))
 
-    let vertexTextureNumber = this.res.faces[fi].vt[vi]
-    this.varyingVertexTextureUV[vi] = this.res.vts[vertexTextureNumber]
+    let vertexTextureNumber = this.model.faces[fi].vt[vi]
+    this.varyingVertexTextureUV[vi] = this.model.vts[vertexTextureNumber]
     return coord
   }
 
@@ -71,33 +83,32 @@ export class ShaderWithTexture {
     let intensity = dot(this.varyingIntensity, bc)
     let [u, v] = matmul([bc], this.varyingVertexTextureUV)[0].map(v => parseInt(v * 1024))
     let k = u + (this.diffuseH - 1 - v) * this.diffuseW
-    color[0] = this.res.diffuse.imageData[4 * k] * intensity
-    color[1] = this.res.diffuse.imageData[4 * k + 1] * intensity
-    color[2] = this.res.diffuse.imageData[4 * k + 2] * intensity
+    color[0] = this.diffuse.imageData[4 * k] * intensity
+    color[1] = this.diffuse.imageData[4 * k + 1] * intensity
+    color[2] = this.diffuse.imageData[4 * k + 2] * intensity
     return false
   }
 }
 
-export class TextureAndNormalMap {
-  constructor(res, lightDir, uniM, uniMIT) {
-    this.res = res
-    this.lightDir = lightDir
-    this.uniM = uniM
-    this.uniMIT = uniMIT
+export class TextureAndNormalMap extends Shader {
+  constructor(uniform) {
+    super()
+    this.model = uniform.model
+    this.diffuse = uniform.diffuse
+    this.normal = uniform.normal
 
-    this.diffuseW = this.res.diffuse.header.width
-    this.diffuseH = this.res.diffuse.header.height
+    this.diffuseW = this.diffuse.header.width
+    this.diffuseH = this.diffuse.header.height
     this.varyingVertexTextureUV = []
-    this.lightDirTrx = iNormalize3(matmulvec4aug(this.uniM, lightDir, 1).slice(0, 3))
   }
 
   vertex(fi, vi) {
-    let vertexNumber = this.res.faces[fi].v[vi]
-    let vertex = this.res.vertices[vertexNumber]
+    let vertexNumber = this.model.faces[fi].v[vi]
+    let vertex = this.model.vertices[vertexNumber]
     let coord = matmulvec4aug(this.uniM, vertex, 1)
 
-    let vertexTextureNumber = this.res.faces[fi].vt[vi]
-    this.varyingVertexTextureUV[vi] = this.res.vts[vertexTextureNumber]
+    let vertexTextureNumber = this.model.faces[fi].vt[vi]
+    this.varyingVertexTextureUV[vi] = this.model.vts[vertexTextureNumber]
     return coord
   }
 
@@ -106,9 +117,10 @@ export class TextureAndNormalMap {
     let k = u + (this.diffuseH - 1 - v) * this.diffuseW
 
     let normalData = iNormalize3([
-      (this.res.normalMap.imageData[4 * k] / 255) * 2 - 1,
-      (this.res.normalMap.imageData[4 * k + 1] / 255) * 2 - 1,
-      (this.res.normalMap.imageData[4 * k + 2] / 255) * 2 - 1,
+      // FIXME: not tangentNM, it's global but stick to name for now.
+      (this.normal.imageData[4 * k] / 255) * 2 - 1,
+      (this.normal.imageData[4 * k + 1] / 255) * 2 - 1,
+      (this.normal.imageData[4 * k + 2] / 255) * 2 - 1,
       // based on the ssloy's normal(facei, vi)
       // this effectively switch x with z
       // this makes no change to render weirdly.
@@ -118,36 +130,35 @@ export class TextureAndNormalMap {
     let normal = iNormalize3(matmulvec4aug(this.uniMIT, normalData, 0).slice(0, 3))
     let intensity = Math.min(1, Math.max(0, dot(normal, this.lightDirTrx)))
 
-    color[0] = this.res.diffuse.imageData[4 * k] * intensity
-    color[1] = this.res.diffuse.imageData[4 * k + 1] * intensity
-    color[2] = this.res.diffuse.imageData[4 * k + 2] * intensity
-    color[3] = this.res.diffuse.imageData[4 * k + 3]
+    color[0] = this.diffuse.imageData[4 * k] * intensity
+    color[1] = this.diffuse.imageData[4 * k + 1] * intensity
+    color[2] = this.diffuse.imageData[4 * k + 2] * intensity
+    color[3] = this.diffuse.imageData[4 * k + 3]
     return false
   }
 }
 
 // Phong lighting
-export class DiffuseNormalSpecular {
-  constructor(res, lightDir, uniM, uniMIT) {
+export class DiffuseNormalSpecular extends Shader {
+  constructor(uniform) {
+    super()
+    this.model = uniform.model
+    this.diffuse = uniform.diffuse
+    this.normal = uniform.normal
+    this.specular = uniform.specular
+
+    this.diffuseW = this.diffuse.header.width
+    this.diffuseH = this.diffuse.header.height
     this.varyingVertexTextureUV = []
-    this.res = res
-    this.lightDir = lightDir
-
-    this.diffuseW = this.res.diffuse.header.width
-    this.diffuseH = this.res.diffuse.header.height
-
-    this.uniM = uniM
-    this.uniMIT = uniMIT
-    this.lightDirTrx = iNormalize3(matmulvec4aug(this.uniM, lightDir, 1).slice(0, 3))
   }
 
   vertex(fi, vi) {
-    let vertexNumber = this.res.faces[fi].v[vi]
-    let vertex = this.res.vertices[vertexNumber]
+    let vertexNumber = this.model.faces[fi].v[vi]
+    let vertex = this.model.vertices[vertexNumber]
     let coord = matmulvec4aug(this.uniM, vertex, 1)
 
-    let vertexTextureNumber = this.res.faces[fi].vt[vi]
-    this.varyingVertexTextureUV[vi] = this.res.vts[vertexTextureNumber]
+    let vertexTextureNumber = this.model.faces[fi].vt[vi]
+    this.varyingVertexTextureUV[vi] = this.model.vts[vertexTextureNumber]
     return coord
   }
 
@@ -156,9 +167,9 @@ export class DiffuseNormalSpecular {
     let k = u + (this.diffuseH - 1 - v) * this.diffuseW
 
     let normalData = iNormalize3([
-      (this.res.normalMap.imageData[4 * k] / 255) * 2 - 1,
-      (this.res.normalMap.imageData[4 * k + 1] / 255) * 2 - 1,
-      (this.res.normalMap.imageData[4 * k + 2] / 255) * 2 - 1,
+      (this.normal.imageData[4 * k] / 255) * 2 - 1,
+      (this.normal.imageData[4 * k + 1] / 255) * 2 - 1,
+      (this.normal.imageData[4 * k + 2] / 255) * 2 - 1,
     ])
 
     let normal = iNormalize3(
@@ -182,13 +193,13 @@ export class DiffuseNormalSpecular {
     ])
 
     // spec is 1024 * 1024 * 8bit data but TGALoader reads 32bits as [v,v,v,255]
-    let specData = this.res.spec.imageData[4 * k]
+    let specData = this.specular.imageData[4 * k]
     let spec = Math.max(0, reflection[2]) ** specData
     let value = diff + spec * 0.6
-    color[0] = Math.min(255, 5 + this.res.diffuse.imageData[4 * k] * value)
-    color[1] = Math.min(255, 5 + this.res.diffuse.imageData[4 * k + 1] * value)
-    color[2] = Math.min(255, 5 + this.res.diffuse.imageData[4 * k + 2] * value)
-    color[3] = this.res.diffuse.imageData[4 * k + 3]
+    color[0] = Math.min(255, 5 + this.diffuse.imageData[4 * k] * value)
+    color[1] = Math.min(255, 5 + this.diffuse.imageData[4 * k + 1] * value)
+    color[2] = Math.min(255, 5 + this.diffuse.imageData[4 * k + 2] * value)
+    color[3] = this.diffuse.imageData[4 * k + 3]
     return false
   }
 }
@@ -200,24 +211,24 @@ export class DiffuseNormalSpecular {
  * http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-13-normal-mapping/
  * https://learnopengl.com/Advanced-Lighting/Normal-Mapping
  */
-export class DiffuseTangentNormalSpecular {
-  constructor(res, lightDir, uniM, uniMIT) {
-    this.res = res
-    this.lightDir = lightDir
-    this.uniM = uniM
-    this.uniMIT = uniMIT
+export class DiffuseTangentNormalSpecular extends Shader {
+  constructor(uniform) {
+    super()
+    this.model = uniform.model
+    this.diffuse = uniform.diffuse
+    this.normal = uniform.normal
+    this.specular = uniform.specular
 
-    this.diffuseW = this.res.diffuse.header.width
-    this.diffuseH = this.res.diffuse.header.height
+    this.diffuseW = this.diffuse.header.width
+    this.diffuseH = this.diffuse.header.height
     this.varyingVertexTextureUV = []
     this.vertexNormals = []
     this.varyingCoord = []
-    this.lightDirTrx = iNormalize3(matmulvec4aug(this.uniM, lightDir, 1).slice(0, 3))
   }
 
   vertex(fi, vi) {
-    let vertexNumber = this.res.faces[fi].v[vi]
-    let vertex = this.res.vertices[vertexNumber]
+    let vertexNumber = this.model.faces[fi].v[vi]
+    let vertex = this.model.vertices[vertexNumber]
 
     // apply viewport after, only proj, modelview here
     // it doesn't feel right to apply viewport here
@@ -226,11 +237,11 @@ export class DiffuseTangentNormalSpecular {
     let coords = matmulvec4aug(this.uniM, vertex, 1)
     this.varyingCoord[vi] = [coords[0] / coords[3], coords[1] / coords[3], coords[2] / coords[3]]
 
-    let vertexTextureNumber = this.res.faces[fi].vt[vi]
-    this.varyingVertexTextureUV[vi] = this.res.vts[vertexTextureNumber]
+    let vertexTextureNumber = this.model.faces[fi].vt[vi]
+    this.varyingVertexTextureUV[vi] = this.model.vts[vertexTextureNumber]
 
     this.vertexNormals[vi] = iNormalize3(
-      matmulvec4aug(this.uniMIT, this.res.vns[this.res.faces[fi].vn[vi]], 0).slice(0, 3),
+      matmulvec4aug(this.uniMIT, this.model.vns[this.model.faces[fi].vn[vi]], 0).slice(0, 3),
     )
     return coords
   }
@@ -242,9 +253,9 @@ export class DiffuseTangentNormalSpecular {
     let k = u + (this.diffuseH - 1 - v) * this.diffuseW
     let intN = iNormalize3(matmul([bc], this.vertexNormals)[0])
     let tangentNormal = [
-      (this.res.tangentNM.imageData[4 * k] / 255) * 2 - 1,
-      (this.res.tangentNM.imageData[4 * k + 1] / 255) * 2 - 1,
-      (this.res.tangentNM.imageData[4 * k + 2] / 255) * 2 - 1,
+      (this.normal.imageData[4 * k] / 255) * 2 - 1,
+      (this.normal.imageData[4 * k + 1] / 255) * 2 - 1,
+      (this.normal.imageData[4 * k + 2] / 255) * 2 - 1,
     ]
 
     let e1 = subtract(this.varyingCoord[1], this.varyingCoord[0])
@@ -285,14 +296,14 @@ export class DiffuseTangentNormalSpecular {
     ])
 
     // spec is 1024 * 1024 * 8bit data but TGALoader reads 32bits as [v,v,v,255]
-    let specData = this.res.spec.imageData[4 * k]
+    let specData = this.specular.imageData[4 * k]
     let spec = Math.max(0, reflection[2]) ** specData
     let value = diff + spec * 0.6
 
-    color[0] = Math.min(255, 5 + this.res.diffuse.imageData[4 * k] * value)
-    color[1] = Math.min(255, 5 + this.res.diffuse.imageData[4 * k + 1] * value)
-    color[2] = Math.min(255, 5 + this.res.diffuse.imageData[4 * k + 2] * value)
-    color[3] = this.res.diffuse.imageData[4 * k + 3]
+    color[0] = Math.min(255, 5 + this.diffuse.imageData[4 * k] * value)
+    color[1] = Math.min(255, 5 + this.diffuse.imageData[4 * k + 1] * value)
+    color[2] = Math.min(255, 5 + this.diffuse.imageData[4 * k + 2] * value)
+    color[3] = this.diffuse.imageData[4 * k + 3]
     return false
   }
 }
@@ -301,33 +312,34 @@ export class DiffuseTangentNormalSpecular {
  * Faster version of above [DiffuseTangentNormalSpecular]
  * hardcoded some calculations. Takes about half (2000ms -> 800ms)
  */
-export class FastDiffuseTangentNormalSpecular {
-  constructor(res, lightDir, uniM, uniMIT) {
-    this.res = res
-    this.lightDir = lightDir
-    this.uniM = uniM
-    this.uniMIT = uniMIT
+export class FastDiffuseTangentNormalSpecular extends Shader {
+  constructor(uniform) {
+    super()
+    // FIXME feels awkard to set model as uniform, fine for now tho
+    this.model = uniform.model
+    this.diffuse = uniform.diffuse
+    this.normal = uniform.normal
+    this.specular = uniform.specular
 
-    this.diffuseW = this.res.diffuse.header.width
-    this.diffuseH = this.res.diffuse.header.height
-    this.varyingVertexTextureUV = [[], []]
+    this.diffuseW = this.diffuse.header.width
+    this.diffuseH = this.diffuse.header.height
+    this.varyingVertexTextureUV = []
     this.vertexNormals = []
     this.varyingCoord = []
-    this.lightDirTrx = iNormalize3(matmulvec4aug(this.uniM, lightDir, 1).slice(0, 3))
   }
 
   vertex(fi, vi) {
-    let vertexNumber = this.res.faces[fi].v[vi]
-    let vertex = this.res.vertices[vertexNumber]
+    let vertexNumber = this.model.faces[fi].v[vi]
+    let vertex = this.model.vertices[vertexNumber]
 
     let coords = matmulvec4aug(this.uniM, vertex, 1)
     this.varyingCoord[vi] = [coords[0] / coords[3], coords[1] / coords[3], coords[2] / coords[3]]
 
-    let vertexTextureNumber = this.res.faces[fi].vt[vi]
-    this.varyingVertexTextureUV[vi] = this.res.vts[vertexTextureNumber]
+    let vertexTextureNumber = this.model.faces[fi].vt[vi]
+    this.varyingVertexTextureUV[vi] = this.model.vts[vertexTextureNumber]
 
     this.vertexNormals[vi] = iNormalize3(
-      matmulvec4aug(this.uniMIT, this.res.vns[this.res.faces[fi].vn[vi]], 0).slice(0, 3),
+      matmulvec4aug(this.uniMIT, this.model.vns[this.model.faces[fi].vn[vi]], 0).slice(0, 3),
     )
     return coords
   }
@@ -369,9 +381,9 @@ export class FastDiffuseTangentNormalSpecular {
     ])
 
     let tangentNormal = [
-      (this.res.tangentNM.imageData[4 * k] / 255) * 2 - 1,
-      (this.res.tangentNM.imageData[4 * k + 1] / 255) * 2 - 1,
-      (this.res.tangentNM.imageData[4 * k + 2] / 255) * 2 - 1,
+      (this.normal.imageData[4 * k] / 255) * 2 - 1,
+      (this.normal.imageData[4 * k + 1] / 255) * 2 - 1,
+      (this.normal.imageData[4 * k + 2] / 255) * 2 - 1,
     ]
 
     let iE = inverse3([
@@ -423,8 +435,6 @@ export class FastDiffuseTangentNormalSpecular {
     let normal = iNormalize3(matmulvec(TBN, tangentNormal))
     let diff = Math.max(0, dot(normal, this.lightDirTrx))
 
-    // specular
-    // n * (2n * l) - l
     let dotted = 2 * dot(normal, this.lightDirTrx)
     let reflection = iNormalize3(
       subtract(
@@ -434,14 +444,14 @@ export class FastDiffuseTangentNormalSpecular {
     )
 
     // spec is 1024 * 1024 * 8bit data but TGALoader reads 32bits as [v,v,v,255]
-    let specData = this.res.spec.imageData[4 * k]
+    let specData = this.specular.imageData[4 * k]
     let spec = Math.max(0, reflection[2]) ** specData
     let value = diff + spec * 0.6
 
-    color[0] = Math.min(255, 5 + this.res.diffuse.imageData[4 * k] * value)
-    color[1] = Math.min(255, 5 + this.res.diffuse.imageData[4 * k + 1] * value)
-    color[2] = Math.min(255, 5 + this.res.diffuse.imageData[4 * k + 2] * value)
-    color[3] = this.res.diffuse.imageData[4 * k + 3]
+    color[0] = Math.min(255, 5 + this.diffuse.imageData[4 * k] * value)
+    color[1] = Math.min(255, 5 + this.diffuse.imageData[4 * k + 1] * value)
+    color[2] = Math.min(255, 5 + this.diffuse.imageData[4 * k + 2] * value)
+    color[3] = this.diffuse.imageData[4 * k + 3]
     return false
   }
 }
