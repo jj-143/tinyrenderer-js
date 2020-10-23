@@ -4,7 +4,8 @@
   "description": "Tinyrenderer implemented in JS",
   "main": "src/index.js",
   "scripts": {
-    "start": "parcel ./demo/index.html"
+    "start": "parcel ./demo/index.html",
+    "build-gh": "parcel build demo/index.html -d docs --public-url /tinyrenderer-js/docs"
   },
   "dependencies": {
     "parcel-bundler": "^1.12.4",
