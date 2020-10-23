@@ -12,12 +12,10 @@ import {
 
 class Shader {
   updateUniform(uniform) {
-    this.uniM = uniform.uniM
+    this.uniM = uniform.uniM ?? this.uniM
     this.uniMIT = uniform.uniM ? inverse(transpose(this.uniM)) : this.uniMIT
     this.lightDirTrx =
-      // TMP fix light dir for demo
-      // uniform.uniM || uniform.lightDir
-      !this.lightDirTrx
+      uniform.uniM || uniform.lightDir
         ? iNormalize3(matmulvec4aug(this.uniM, uniform.lightDir, 1).slice(0, 3))
         : this.lightDirTrx
   }

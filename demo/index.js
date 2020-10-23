@@ -39,15 +39,19 @@ loader.all().then(({ model, ...textures }) => {
   animate()
 })
 
-// just rotate around y-axis (up)
-let distance = 3
-let deg = 0
+// rotate camera & lightDir around y-axis (up)
+let deg = -Math.PI / 36
+let x = 0
+let z = 3
 
 function animate() {
   renderer.render(scene, camera)
-  let x = Math.sin(deg) * distance
-  let z = Math.cos(deg) * distance
+  ;[x, z] = [Math.cos(deg) * x - Math.sin(deg) * z, Math.sin(deg) * x + Math.cos(deg) * z]
+  light.dir = [
+    Math.cos(deg) * light.dir[0] - Math.sin(deg) * light.dir[2],
+    light.dir[1],
+    Math.sin(deg) * light.dir[0] + Math.cos(deg) * light.dir[2],
+  ]
   camera.update({ position: [x, 0, z] })
-  deg += Math.PI / 36
   requestAnimationFrame(animate)
 }
