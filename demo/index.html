@@ -15,10 +15,19 @@
       background: black;
       /* image-rendering: pixelated; */
     }
+
+    input[type=range] {
+      display:block;
+      margin: 1rem auto;
+      width: 800px;
+    }
   </style>
 <body>
   <h1>Tiny Renderer in JS : A browser implementation of Tiny Renderer</h1>
   <canvas id="app" width=800 height=800></canvas>
+
+  <input id='rot-y' type="range" value=0 min=-180 max=180>
+  <button id="play-pause">play/pause</button>
   <script src="index.js"></script>
 </body>
 </html>

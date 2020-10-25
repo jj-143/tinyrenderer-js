@@ -17,12 +17,15 @@ loader.addTexture("normal", tangentNM)
 let renderer = new TinyRenderer({ target: document.getElementById("app") })
 renderer.setSize(800, 800)
 
+let initialCameraPos = [0, 0, 3]
+let initialLightDir = neg(normalize([-3, -2, -3]))
+
 let camera = new PerspectiveCamera({
-  position: [1, 1, 3],
+  position: initialCameraPos,
   viewport: [800, 800],
 })
 let light = {
-  dir: neg(normalize([-4, -2, -3])),
+  dir: initialLightDir,
 }
 
 let scene = {
@@ -36,22 +39,89 @@ loader.all().then(({ model, ...textures }) => {
   }
   model.shader = new FastDiffuseTangentNormalSpecular(uniform)
   scene.model = model
-  animate()
+
+  renderer.render(scene, camera)
+
+  // assume initial position is front-facing
+  let deg = (rad * 180) / Math.PI
+  slider.value = deg > 180 ? deg - 360 : deg
+  if (playState === "PLAY") animate()
 })
 
-// rotate camera & lightDir around y-axis (up)
-let deg = -Math.PI / 36
+//
+// rotate-y
+// rendering took 400 - 700ms for Fast shader.
+// 48frames for a full turn
+// OR 7.5 degree per frame
+// OR rotate 10.5-18.75 DEG/sec
+
+let RAD_INC = -(2 * Math.PI) / 48
+// convert to range [0 - 2*PI]
+RAD_INC = (2 * Math.PI + RAD_INC) % (2 * Math.PI)
+
+let rad = 0
+// camera position
 let x = 0
 let z = 3
 
 function animate() {
-  renderer.render(scene, camera)
-  ;[x, z] = [Math.cos(deg) * x - Math.sin(deg) * z, Math.sin(deg) * x + Math.cos(deg) * z]
-  light.dir = [
-    Math.cos(deg) * light.dir[0] - Math.sin(deg) * light.dir[2],
-    light.dir[1],
-    Math.sin(deg) * light.dir[0] + Math.cos(deg) * light.dir[2],
-  ]
+  rad = (rad + RAD_INC) % (2 * Math.PI)
+  setRotatedPosition(rad)
+
   camera.update({ position: [x, 0, z] })
+  renderer.render(scene, camera)
+
+  let deg = (rad * 180) / Math.PI
+  slider.value = deg > 180 ? deg - 360 : deg
+
+  if (playState === "PAUSE") return
   requestAnimationFrame(animate)
+}
+
+//
+// simple control
+
+let button = document.getElementById("play-pause")
+let playState = "PLAY"
+button.textContent = "PAUSE"
+
+button.addEventListener("click", () => {
+  playState === "PLAY" ? stopAnimate() : startAnimate()
+})
+
+let slider = document.getElementById("rot-y")
+slider.addEventListener("change", e => {
+  // TODO
+  // currently, model's front facing and moving the camera (and light)
+  // if model's position (another matrix before projection) implemented,
+  // model's "pose" will be preserved while rotating camera
+  let deg = (Number(slider.value) + 360) % 360
+  rad = (deg / 180) * Math.PI
+  setRotatedPosition(rad)
+
+  camera.update({ position: [x, 0, z] })
+  renderer.render(scene, camera)
+})
+
+function setRotatedPosition(rad) {
+  x = initialCameraPos[0]
+  z = initialCameraPos[2]
+  light.dir = initialLightDir
+  ;[x, z] = [Math.cos(rad) * x - Math.sin(rad) * z, Math.sin(rad) * x + Math.cos(rad) * z]
+  light.dir = [
+    Math.cos(rad) * light.dir[0] - Math.sin(rad) * light.dir[2],
+    light.dir[1],
+    Math.sin(rad) * light.dir[0] + Math.cos(rad) * light.dir[2],
+  ]
+}
+
+function startAnimate() {
+  playState = "PLAY"
+  button.textContent = "PAUSE"
+  animate()
+}
+
+function stopAnimate() {
+  playState = "PAUSE"
+  button.textContent = "PLAY"
 }
