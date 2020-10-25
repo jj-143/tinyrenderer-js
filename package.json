@@ -5,7 +5,7 @@
   "main": "src/index.js",
   "scripts": {
     "start": "parcel ./demo/index.html",
-    "build-gh": "parcel build demo/index.html -d docs --public-url /tinyrenderer-js/docs"
+    "build-gh": "parcel build -d docs --public-url /tinyrenderer-js/docs --no-source-maps --no-content-hash demo/index.html "
   },
   "dependencies": {
     "parcel-bundler": "^1.12.4",
