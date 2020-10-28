@@ -8,6 +8,8 @@ import {
   transpose,
   iNormalize3,
   matmulvec4aug,
+  vecdiv,
+  matmul4,
 } from "./vecOps"
 
 class Shader {
@@ -449,6 +451,209 @@ export class FastDiffuseTangentNormalSpecular extends Shader {
     color[0] = Math.min(255, 5 + this.diffuse.imageData[4 * k] * value)
     color[1] = Math.min(255, 5 + this.diffuse.imageData[4 * k + 1] * value)
     color[2] = Math.min(255, 5 + this.diffuse.imageData[4 * k + 2] * value)
+    color[3] = this.diffuse.imageData[4 * k + 3]
+    return false
+  }
+}
+
+export class DepthShader extends Shader {
+  constructor(uniform) {
+    super()
+    this.model = uniform.model
+    this.viewport = uniform.viewport
+  }
+
+  vertex(fi, vi) {
+    let vertexNumber = this.model.faces[fi].v[vi]
+    let vertex = this.model.vertices[vertexNumber]
+    let coord = matmulvec4aug(this.uniM, vertex, 1)
+    return coord
+  }
+
+  fragment(bc, color) {
+    return false
+  }
+}
+
+export class WithShadowMapping extends Shader {
+  constructor(uniform, shadowBuffer) {
+    super()
+    this.model = uniform.model
+    this.diffuse = uniform.diffuse
+    this.normal = uniform.normal
+    this.specular = uniform.specular
+
+    this.diffuseW = this.diffuse.header.width
+    this.diffuseH = this.diffuse.header.height
+    this.varyingVertexTextureUV = []
+    this.vertexNormals = []
+    this.varyingCoord = [[], [], []]
+    this.varyingCoordNotViewport = []
+
+    // using depthShader
+    this.viewport = uniform.viewport
+    this.bufferWidth = uniform.bufferWidth
+    this.objectToDepth = uniform.objectToDepth
+    this.shadowBuffer = shadowBuffer
+  }
+
+  updateUniform(uniform) {
+    this.uniM = uniform.uniM ?? this.uniM
+    this.uniMIT = uniform.uniM ? inverse(transpose(this.uniM)) : this.uniMIT
+    this.lightDirTrx =
+      uniform.uniM || uniform.lightDir
+        ? iNormalize3(matmulvec4aug(this.uniM, uniform.lightDir, 1).slice(0, 3))
+        : this.lightDirTrx
+
+    // override to do below
+    let frameToObject = inverse(matmul(this.viewport, this.uniM))
+    this.frameToDepthBuffer = matmul4(this.objectToDepth, frameToObject)
+  }
+
+  vertex(fi, vi) {
+    let vertexNumber = this.model.faces[fi].v[vi]
+    let vertex = this.model.vertices[vertexNumber]
+
+    let coords = matmulvec4aug(this.uniM, vertex, 1)
+
+    // use viewported varyingCoord
+    let withViewport = matmul4(this.viewport, this.uniM)
+    let viewported = matmulvec4aug(withViewport, vertex, 1)
+
+    // column vectors
+    // TODO also apply this to (and in calc TBN in fragment())
+    this.varyingCoord[0][vi] = viewported[0] / viewported[3]
+    this.varyingCoord[1][vi] = viewported[1] / viewported[3]
+    this.varyingCoord[2][vi] = viewported[2] / viewported[3]
+
+    let vertexTextureNumber = this.model.faces[fi].vt[vi]
+    this.varyingVertexTextureUV[vi] = this.model.vts[vertexTextureNumber]
+
+    this.vertexNormals[vi] = iNormalize3(
+      matmulvec4aug(this.uniMIT, this.model.vns[this.model.faces[fi].vn[vi]], 0).slice(0, 3),
+    )
+    return coords
+  }
+
+  fragment(bc, color) {
+    let [u, v] = [
+      parseInt(
+        (bc[0] * this.varyingVertexTextureUV[0][0] +
+          bc[1] * this.varyingVertexTextureUV[1][0] +
+          bc[2] * this.varyingVertexTextureUV[2][0]) *
+          1024,
+      ),
+      parseInt(
+        (bc[0] * this.varyingVertexTextureUV[0][1] +
+          bc[1] * this.varyingVertexTextureUV[1][1] +
+          bc[2] * this.varyingVertexTextureUV[2][1]) *
+          1024,
+      ),
+      parseInt(
+        (bc[0] * this.varyingVertexTextureUV[0][2] +
+          bc[1] * this.varyingVertexTextureUV[1][2] +
+          bc[2] * this.varyingVertexTextureUV[2][2]) *
+          1024,
+      ),
+    ]
+
+    let k = u + (this.diffuseH - 1 - v) * this.diffuseW
+
+    let intN = iNormalize3([
+      bc[0] * this.vertexNormals[0][0] +
+        bc[1] * this.vertexNormals[1][0] +
+        bc[2] * this.vertexNormals[2][0],
+      bc[0] * this.vertexNormals[0][1] +
+        bc[1] * this.vertexNormals[1][1] +
+        bc[2] * this.vertexNormals[2][1],
+      bc[0] * this.vertexNormals[0][2] +
+        bc[1] * this.vertexNormals[1][2] +
+        bc[2] * this.vertexNormals[2][2],
+    ])
+
+    let tangentNormal = [
+      (this.normal.imageData[4 * k] / 255) * 2 - 1,
+      (this.normal.imageData[4 * k + 1] / 255) * 2 - 1,
+      (this.normal.imageData[4 * k + 2] / 255) * 2 - 1,
+    ]
+
+    let iE = inverse3([
+      [
+        this.varyingCoord[0][1] - this.varyingCoord[0][0],
+        this.varyingCoord[1][1] - this.varyingCoord[1][0],
+        this.varyingCoord[2][1] - this.varyingCoord[2][0],
+      ],
+      [
+        this.varyingCoord[0][2] - this.varyingCoord[0][0],
+        this.varyingCoord[1][2] - this.varyingCoord[1][0],
+        this.varyingCoord[2][2] - this.varyingCoord[2][0],
+      ],
+      intN,
+    ])
+
+    let t1 = [
+      this.varyingVertexTextureUV[1][0] - this.varyingVertexTextureUV[0][0],
+      this.varyingVertexTextureUV[1][1] - this.varyingVertexTextureUV[0][1],
+      0,
+    ]
+    let t2 = [
+      this.varyingVertexTextureUV[2][0] - this.varyingVertexTextureUV[0][0],
+      this.varyingVertexTextureUV[2][1] - this.varyingVertexTextureUV[0][1],
+      0,
+    ]
+
+    let TBN = []
+    TBN[0] = [iE[0][0] * t1[0] + iE[0][1] * t2[0], iE[0][0] * t1[1] + iE[0][1] * t2[1], intN[0]]
+    TBN[1] = [iE[1][0] * t1[0] + iE[1][1] * t2[0], iE[1][0] * t1[1] + iE[1][1] * t2[1], intN[1]]
+    TBN[2] = [iE[2][0] * t1[0] + iE[2][1] * t2[0], iE[2][0] * t1[1] + iE[2][1] * t2[1], intN[2]]
+
+    let tNorm = Math.sqrt(TBN[0][0] ** 2 + TBN[1][0] ** 2 + TBN[2][0] ** 2)
+    let bNorm = Math.sqrt(TBN[0][1] ** 2 + TBN[1][1] ** 2 + TBN[2][1] ** 2)
+
+    TBN[0][0] /= tNorm
+    TBN[1][0] /= tNorm
+    TBN[2][0] /= tNorm
+
+    TBN[0][1] /= bNorm
+    TBN[1][1] /= bNorm
+    TBN[2][1] /= bNorm
+
+    let normal = iNormalize3(matmulvec(TBN, tangentNormal))
+    let diff = Math.max(0, dot(normal, this.lightDirTrx))
+
+    let dotted = 2 * dot(normal, this.lightDirTrx)
+    let reflection = iNormalize3(
+      subtract(
+        normal.map(v => v * dotted),
+        this.lightDirTrx,
+      ),
+    )
+
+    let specData = this.specular.imageData[4 * k]
+    let spec = Math.max(0, reflection[2]) ** (5 + specData)
+
+    //
+    // shadow mapping stuff
+    let pixel = matmulvec(this.varyingCoord, bc)
+
+    let shadowBufferPixel = matmulvec4aug(this.frameToDepthBuffer, pixel, 1)
+    shadowBufferPixel = vecdiv(shadowBufferPixel, shadowBufferPixel[3])
+    let shadowBufferIdx =
+      (this.bufferWidth - 1 - parseInt(shadowBufferPixel[1])) * this.bufferWidth +
+      parseInt(shadowBufferPixel[0])
+
+    // it is "exposed to light" when this pixel, mapped to view from light,
+    // has higher z value (closer to camera, or light here) than closest value
+    // seen from the light, which stored in shadow buffer
+    // magic 5 for 255 depth, 15 for width (800)
+    let isExposed = this.shadowBuffer[shadowBufferIdx] < shadowBufferPixel[2] + 5
+    let shadow = 0.3 + 0.7 * isExposed
+
+    let value = shadow * (1.2 * diff + spec * 0.6)
+
+    color[0] = 20 + this.diffuse.imageData[4 * k] * value
+    color[1] = 20 + this.diffuse.imageData[4 * k + 1] * value
+    color[2] = 20 + this.diffuse.imageData[4 * k + 2] * value
     color[3] = this.diffuse.imageData[4 * k + 3]
     return false
   }

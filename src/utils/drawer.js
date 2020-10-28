@@ -1,7 +1,7 @@
 import { dot, matmul, vecdiv } from "./vecOps"
 import { barycentric } from "./utils"
 
-export function triangleWithZBuffer(v0, v1, v2, shader, zBuffer, data, width, viewportTr) {
+export function triangleWithZBuffer(v0, v1, v2, shader, zBuffer, data, width, viewportTr, draw) {
   // apply viewport, div by aug here
   ;[v0, v1, v2] = matmul([v0, v1, v2], viewportTr).map(v => vecdiv(v.slice(0, 3), v[3]))
 
@@ -36,6 +36,9 @@ export function triangleWithZBuffer(v0, v1, v2, shader, zBuffer, data, width, vi
 
       if (!discard) {
         zBuffer[bufferIdx] = z
+
+        // bypass in multi-pass rendering
+        if (!draw) continue
         data[bufferIdx * 4] = color[0]
         data[bufferIdx * 4 + 1] = color[1]
         data[bufferIdx * 4 + 2] = color[2]

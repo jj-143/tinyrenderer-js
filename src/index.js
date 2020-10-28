@@ -15,15 +15,24 @@ class TinyRenderer {
   setSize(width, height) {
     this.domElement.width = width
     this.domElement.height = height
-    this.zBuffer = new Uint8ClampedArray(width * height * 4)
+    this.canvasWidth = width
+    this.canvasHeight = height
+    this.imgData = this.ctx.getImageData(0, 0, width, height)
+    this.data = this.imgData.data
+    this.zBuffer = new Float32Array(width * height)
+    this.zBuffer.fill(-Infinity)
   }
 
-  render(scene, camera) {
-    let { vW, vH } = camera
-    this.ctx.clearRect(0, 0, vW, vH)
-    let imgData = this.ctx.getImageData(0, 0, vW, vH)
-    let data = imgData.data
-    this.zBuffer.fill(-Infinity)
+  render(scene, camera, { clear = true, draw = true } = { clear: true, draw: true }) {
+    // for the multi-pass rendering
+    if (clear) {
+      this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight)
+      this.imgData = this.ctx.getImageData(0, 0, this.canvasWidth, this.canvasHeight)
+      this.data = this.imgData.data
+      this.zBuffer.fill(-Infinity)
+    }
+
+    let { imgData, data } = this
 
     // setup
     let { model, light } = scene
@@ -42,7 +51,7 @@ class TinyRenderer {
       for (let vi = 0; vi < 3; vi++) {
         coords[vi] = shader.vertex(fi, vi)
       }
-      triangleWithZBuffer(...coords, shader, this.zBuffer, data, vW, viewportTr)
+      triangleWithZBuffer(...coords, shader, this.zBuffer, data, this.canvasWidth, viewportTr, draw)
     }
     console.log("render: ", new Date() - renderingTime, "ms")
     this.ctx.putImageData(imgData, 0, 0)
