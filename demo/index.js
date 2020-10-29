@@ -52,12 +52,13 @@ loader.all().then(({ model, ...textures }) => {
   scene.model = model
 
   depthShader = new DepthShader(uniform)
-  withShadowMapping = new WithShadowMapping(uniform)
+  scene.model.shader = depthShader
+  // withShadowMapping = new WithShadowMapping(uniform)
   // assume initial position is front-facing
   let deg = (rad * 180) / Math.PI
   slider.value = deg > 180 ? deg - 360 : deg
 
-  playState === "PLAY" ? animate() : render()
+  playState === "PLAY" ? animate() : renderFn()
 })
 
 function render() {
@@ -80,6 +81,13 @@ function render() {
   renderer.render(scene, camera)
 }
 
+function renderAmbient() {
+  camera.update({ position: currentCameraPosition })
+  renderer.renderSSAO(scene, camera)
+}
+
+let renderFn = renderAmbient
+
 //
 // rotate-y
 // rendering took 400 - 700ms for Fast shader.
@@ -96,7 +104,7 @@ let x = 0
 let z = 3
 
 function animate() {
-  render()
+  renderFn()
 
   rad = (rad + RAD_INC) % (2 * Math.PI)
   setRotatedPosition(rad)
@@ -146,7 +154,7 @@ slider.addEventListener("change", e => {
   rad = (deg / 180) * Math.PI
   setRotatedPosition(rad)
 
-  render()
+  renderFn()
 })
 
 function startAnimate() {
