@@ -1,6 +1,6 @@
 # Tiny Renderer in JS
 A JavaScript implementation of [TinyRenderer](https://github.com/ssloy/tinyrenderer) based on the [wiki](https://github.com/ssloy/tinyrenderer/wiki)
-to understand how OpenGL works. [Live Demo](https://github.com/jj-143/tinyrenderer-js/docs/)
+to understand how OpenGL works. [Live Demo](https://jj-143.github.io/tinyrenderer-js/docs/)
 
 ### PROGRESS
 - [x] Lesson 1 - Bresenham’s Line Drawing Algorithm
