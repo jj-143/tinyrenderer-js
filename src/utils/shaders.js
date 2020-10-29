@@ -194,11 +194,11 @@ export class DiffuseNormalSpecular extends Shader {
 
     // spec is 1024 * 1024 * 8bit data but TGALoader reads 32bits as [v,v,v,255]
     let specData = this.specular.imageData[4 * k]
-    let spec = Math.max(0, reflection[2]) ** specData
+    let spec = Math.max(0, reflection[2]) ** (5 + specData)
     let value = diff + spec * 0.6
-    color[0] = Math.min(255, 5 + this.diffuse.imageData[4 * k] * value)
-    color[1] = Math.min(255, 5 + this.diffuse.imageData[4 * k + 1] * value)
-    color[2] = Math.min(255, 5 + this.diffuse.imageData[4 * k + 2] * value)
+    color[0] = 5 + this.diffuse.imageData[4 * k] * value
+    color[1] = 5 + this.diffuse.imageData[4 * k + 1] * value
+    color[2] = 5 + this.diffuse.imageData[4 * k + 2] * value
     color[3] = this.diffuse.imageData[4 * k + 3]
     return false
   }
@@ -297,12 +297,12 @@ export class DiffuseTangentNormalSpecular extends Shader {
 
     // spec is 1024 * 1024 * 8bit data but TGALoader reads 32bits as [v,v,v,255]
     let specData = this.specular.imageData[4 * k]
-    let spec = Math.max(0, reflection[2]) ** specData
+    let spec = Math.max(0, reflection[2]) ** (5 + specData)
     let value = diff + spec * 0.6
 
-    color[0] = Math.min(255, 5 + this.diffuse.imageData[4 * k] * value)
-    color[1] = Math.min(255, 5 + this.diffuse.imageData[4 * k + 1] * value)
-    color[2] = Math.min(255, 5 + this.diffuse.imageData[4 * k + 2] * value)
+    color[0] = 5 + this.diffuse.imageData[4 * k] * value
+    color[1] = 5 + this.diffuse.imageData[4 * k + 1] * value
+    color[2] = 5 + this.diffuse.imageData[4 * k + 2] * value
     color[3] = this.diffuse.imageData[4 * k + 3]
     return false
   }
@@ -325,7 +325,7 @@ export class FastDiffuseTangentNormalSpecular extends Shader {
     this.diffuseH = this.diffuse.header.height
     this.varyingVertexTextureUV = []
     this.vertexNormals = []
-    this.varyingCoord = []
+    this.varyingCoord = [[], [], []]
   }
 
   vertex(fi, vi) {
@@ -333,7 +333,9 @@ export class FastDiffuseTangentNormalSpecular extends Shader {
     let vertex = this.model.vertices[vertexNumber]
 
     let coords = matmulvec4aug(this.uniM, vertex, 1)
-    this.varyingCoord[vi] = [coords[0] / coords[3], coords[1] / coords[3], coords[2] / coords[3]]
+    this.varyingCoord[0][vi] = coords[0] / coords[3]
+    this.varyingCoord[1][vi] = coords[1] / coords[3]
+    this.varyingCoord[2][vi] = coords[2] / coords[3]
 
     let vertexTextureNumber = this.model.faces[fi].vt[vi]
     this.varyingVertexTextureUV[vi] = this.model.vts[vertexTextureNumber]
@@ -388,14 +390,14 @@ export class FastDiffuseTangentNormalSpecular extends Shader {
 
     let iE = inverse3([
       [
-        this.varyingCoord[1][0] - this.varyingCoord[0][0],
-        this.varyingCoord[1][1] - this.varyingCoord[0][1],
-        this.varyingCoord[1][2] - this.varyingCoord[0][2],
+        this.varyingCoord[0][1] - this.varyingCoord[0][0],
+        this.varyingCoord[1][1] - this.varyingCoord[1][0],
+        this.varyingCoord[2][1] - this.varyingCoord[2][0],
       ],
       [
-        this.varyingCoord[2][0] - this.varyingCoord[0][0],
-        this.varyingCoord[2][1] - this.varyingCoord[0][1],
-        this.varyingCoord[2][2] - this.varyingCoord[0][2],
+        this.varyingCoord[0][2] - this.varyingCoord[0][0],
+        this.varyingCoord[1][2] - this.varyingCoord[1][0],
+        this.varyingCoord[2][2] - this.varyingCoord[2][0],
       ],
       intN,
     ])
@@ -445,12 +447,12 @@ export class FastDiffuseTangentNormalSpecular extends Shader {
 
     // spec is 1024 * 1024 * 8bit data but TGALoader reads 32bits as [v,v,v,255]
     let specData = this.specular.imageData[4 * k]
-    let spec = Math.max(0, reflection[2]) ** specData
+    let spec = Math.max(0, reflection[2]) ** (5 + specData)
     let value = diff + spec * 0.6
 
-    color[0] = Math.min(255, 5 + this.diffuse.imageData[4 * k] * value)
-    color[1] = Math.min(255, 5 + this.diffuse.imageData[4 * k + 1] * value)
-    color[2] = Math.min(255, 5 + this.diffuse.imageData[4 * k + 2] * value)
+    color[0] = 5 + this.diffuse.imageData[4 * k] * value
+    color[1] = 5 + this.diffuse.imageData[4 * k + 1] * value
+    color[2] = 5 + this.diffuse.imageData[4 * k + 2] * value
     color[3] = this.diffuse.imageData[4 * k + 3]
     return false
   }
@@ -488,7 +490,6 @@ export class WithShadowMapping extends Shader {
     this.varyingVertexTextureUV = []
     this.vertexNormals = []
     this.varyingCoord = [[], [], []]
-    this.varyingCoordNotViewport = []
 
     // using depthShader
     this.viewport = uniform.viewport
