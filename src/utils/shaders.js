@@ -493,8 +493,8 @@ export class WithShadowMapping extends Shader {
     // using depthShader
     this.viewport = uniform.viewport
     this.bufferWidth = uniform.bufferWidth
-    this.objectToDepth = uniform.objectToDepth
     this.shadowBuffer = shadowBuffer
+    this.uniform = uniform
   }
 
   updateUniform(uniform) {
@@ -507,7 +507,9 @@ export class WithShadowMapping extends Shader {
 
     // override to do below
     let frameToObject = inverse(matmul(this.viewport, this.uniM))
-    this.frameToDepthBuffer = matmul4(this.objectToDepth, frameToObject)
+    let objectToDepth = this.objectToDepth
+
+    this.frameToDepthBuffer = matmul4(objectToDepth, frameToObject)
   }
 
   vertex(fi, vi) {
